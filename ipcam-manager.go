@@ -48,20 +48,25 @@ func OnGetIpcamsInfo(send chan []byte) {
 	ipcamsMutex.Lock()
 	defer ipcamsMutex.Unlock()
 
-	// TODO add type wrap for server parsing
-	info, err := json.Marshal(config.Ipcams)
+	ipcams := make(map[string]ConfigIpcam, len(config.Ipcams))
+	for _, ipcam := range config.Ipcams {
+		ipcams[ipcam.Id] = ipcam
+	}
+	info, err := json.Marshal(ipcams)
 	if err != nil {
 		glog.Errorln(err)
 		return
 	}
-	send <- info
+	glog.Infoln("send IpcamsInfo")
+	// Give a type header
+	send <- append([]byte("one:IpcamsInfo:"), info...)
 }
 
-func OnForceReRegistry(onlined string) {
+func OnReconnectIpcam(id string) {
 	ipcamsMutex.Lock()
 	defer ipcamsMutex.Unlock()
 	for i, _ := range config.Ipcams {
-		if cam := &config.Ipcams[i]; cam.Url == onlined {
+		if cam := &config.Ipcams[i]; cam.Id == id {
 			cam.Online = !cam.Off && conductor.Registry(cam.Url)
 		}
 	}

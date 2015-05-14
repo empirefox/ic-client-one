@@ -6,8 +6,9 @@ import (
 )
 
 type ConfigIpcam struct {
+	Id     string `json:"id,omitempty"`
 	Name   string `json:"name,omitempty"`
-	Url    string `json:"url,omitempty"`
+	Url    string `json:"-"`
 	Off    bool   `json:"off,omitempty"`
 	Online bool   `json:"online,omitempty"`
 }
@@ -31,6 +32,6 @@ func (c *Config) CtrlUrl() string {
 	return c.wsUrl("ctrl")
 }
 
-func (c *Config) SignalingUrl() string {
-	return c.wsUrl("signaling")
+func (c *Config) SignalingUrl(reciever string) string {
+	return c.wsUrl("signaling/" + reciever)
 }

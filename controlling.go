@@ -8,8 +8,9 @@ import (
 )
 
 type Command struct {
-	Name string `json:"name,omitempty"`
-	Url  string `json:"url,omitempty"`
+	Name     string `json:"name"`
+	Reciever string `json:"reciever"`
+	Camera   string `json:"camera"`
 }
 
 func CtrlConnect() {
@@ -19,6 +20,7 @@ func CtrlConnect() {
 func onCtrlConnected(ws *websocket.Conn) {
 	send := make(chan []byte, 64)
 	go writing(ws, send)
+	OnGetIpcamsInfo(send)
 
 	var command Command
 	for {
@@ -27,6 +29,8 @@ func onCtrlConnected(ws *websocket.Conn) {
 			glog.Errorln(err)
 			return
 		}
+		glog.Infoln("From one ctrl:", string(b))
+
 		if err = json.Unmarshal(b, &command); err != nil {
 			glog.Errorln(err)
 			continue
@@ -36,9 +40,9 @@ func onCtrlConnected(ws *websocket.Conn) {
 		case "GetIpcamsInfo":
 			OnGetIpcamsInfo(send)
 		case "CreateSignalingConnection":
-			connect(config.SignalingUrl(), OnCreateSignalingConnection)
-		case "ForceReRegistry":
-			OnForceReRegistry(command.Url)
+			connectSignaling(config.SignalingUrl(command.Reciever), command.Camera, OnCreateSignalingConnection)
+		case "ReconnectIpcam":
+			OnReconnectIpcam(command.Camera)
 		default:
 			glog.Errorln("Unknow command json:", string(b))
 		}

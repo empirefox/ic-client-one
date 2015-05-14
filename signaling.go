@@ -19,7 +19,7 @@ type Signal struct {
 	Url string `json:"url,omitempty"`
 }
 
-func OnCreateSignalingConnection(ws *websocket.Conn) {
+func OnCreateSignalingConnection(ws *websocket.Conn, url string) {
 	var pc *rtc.PeerConn
 	defer func() {
 		if pc != nil {
@@ -35,6 +35,7 @@ func OnCreateSignalingConnection(ws *websocket.Conn) {
 			glog.Errorln(err)
 			return
 		}
+		glog.Infoln("From one signaling:", string(b))
 		if err = json.Unmarshal(b, &signal); err != nil {
 			glog.Errorln(err)
 			continue
@@ -46,7 +47,7 @@ func OnCreateSignalingConnection(ws *websocket.Conn) {
 				glog.Errorln("Peer has created.")
 				break
 			}
-			pc = conductor.CreatePeer(signal.Url)
+			pc = conductor.CreatePeer(url)
 			go writing(ws, pc.ToPeerChan)
 			pc.CreateAnswer(signal.Sdp)
 		case "candidate":
