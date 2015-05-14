@@ -21,7 +21,7 @@ func ParseConfig() Config {
 		PingPeriod: 45 * time.Second,
 		Ipcams: []ConfigIpcam{
 			{
-				Id:   uniuri.NewLen(128),
+				Id:   uniuri.NewLen(32),
 				Name: "客厅",
 				Url:  "rtsp://127.0.0.1:1235/test1.sdp",
 			},

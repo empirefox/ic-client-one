@@ -40,7 +40,7 @@ func onCtrlConnected(ws *websocket.Conn) {
 		case "GetIpcamsInfo":
 			OnGetIpcamsInfo(send)
 		case "CreateSignalingConnection":
-			connectSignaling(config.SignalingUrl(command.Reciever), command.Camera, OnCreateSignalingConnection)
+			go connectSignaling(config.SignalingUrl(command.Reciever), command.Camera, OnCreateSignalingConnection)
 		case "ReconnectIpcam":
 			OnReconnectIpcam(command.Camera)
 		default:
