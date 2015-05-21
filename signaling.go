@@ -1,11 +1,8 @@
 package main
 
 import (
-	"encoding/json"
-
 	"github.com/empirefox/ic-client-one-wrap"
 	"github.com/golang/glog"
-	"github.com/gorilla/websocket"
 )
 
 type Signal struct {
@@ -16,44 +13,50 @@ type Signal struct {
 	Line      int    `json:"sdpMLineIndex,omitempty"`
 
 	Sdp string `json:"sdp,omitempty"`
-	Url string `json:"url,omitempty"`
 }
 
-func OnCreateSignalingConnection(ws *websocket.Conn, url string) {
+func OnCreateSignalingConnection(center *Center, cmd *Command) {
+	glog.Infoln("connect to", cmd.Camera)
+	ws, _, err := dailer.Dial(config.SignalingUrl(cmd.Reciever), nil)
+	if err != nil {
+		glog.Errorln(err)
+		return
+	}
+	defer ws.Close()
+	glog.Infoln("connected")
+	conn := NewConn(center, ws)
+	go conn.WriteClose()
+	onSignalingConnected(conn, config.GetIpcamUrl(cmd.Camera))
+}
+
+func onSignalingConnected(conn *Connection, url string) {
 	var pc *rtc.PeerConn
 	defer func() {
 		if pc != nil {
 			pc.Delete()
-			close(pc.ToPeerChan)
 		}
 	}()
 
-	var signal Signal
 	for {
-		_, b, err := ws.ReadMessage()
-		if err != nil {
+		var signal Signal
+		if err := conn.ReadJSON(&signal); err != nil {
 			glog.Errorln(err)
 			return
-		}
-		glog.Infoln("From one signaling:", string(b))
-		if err = json.Unmarshal(b, &signal); err != nil {
-			glog.Errorln(err)
-			continue
 		}
 
 		switch signal.Type {
 		case "offer":
-			if pc != nil {
-				glog.Errorln("Peer has created.")
-				break
+			if pc == nil {
+				pc = conductor.CreatePeer(url, conn.Send)
+				pc.CreateAnswer(signal.Sdp)
 			}
-			pc = conductor.CreatePeer(url)
-			go writing(ws, pc.ToPeerChan)
-			pc.CreateAnswer(signal.Sdp)
 		case "candidate":
+			if pc == nil {
+				return
+			}
 			pc.AddCandidate(signal.Candidate, signal.Mid, signal.Line)
 		default:
-			glog.Errorln("Unknow signal json:", string(b))
+			glog.Errorln("Unknow signal json")
 		}
 
 	}

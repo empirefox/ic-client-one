@@ -1,10 +1,9 @@
 package main
 
 import (
-	"encoding/json"
+	"time"
 
 	"github.com/golang/glog"
-	"github.com/gorilla/websocket"
 )
 
 type Command struct {
@@ -13,38 +12,59 @@ type Command struct {
 	Camera   string `json:"camera"`
 }
 
-func CtrlConnect() {
-	connect(config.CtrlUrl(), onCtrlConnected)
+func CtrlConnect(center *Center) {
+	for !ctrlConnectLoop(center) {
+	}
 }
 
-func onCtrlConnected(ws *websocket.Conn) {
-	send := make(chan []byte, 64)
-	go writing(ws, send)
-	OnGetIpcamsInfo(send)
+func ctrlConnectLoop(center *Center) (quitLoop bool) {
+	ws, _, err := dailer.Dial(config.CtrlUrl(), nil)
+	if err != nil {
+		glog.Errorln(err)
+		center.ChangeStatus <- "unreachable"
+		time.Sleep(time.Second * 10)
+		return
+	}
+	defer ws.Close()
 
-	var command Command
+	conn := NewConn(center, ws)
+	center.AddCtrlConn(conn)
+	defer center.RemoveCtrlConn()
+
+	go onCtrlConnected(conn)
+	if quitLoop = conn.WriteClose(); !quitLoop {
+		time.Sleep(time.Second * 10)
+	}
+	return
+}
+
+func onCtrlConnected(c *Connection) {
+	addr := config.GetAddr()
+	if len(addr) == 0 {
+		c.Center.ChangeStatus <- "not_authed"
+		return
+	}
+	c.Center.ChangeStatus <- "ready"
+	defer func() { c.Center.ChangeStatus <- "not_ready" }()
+	// login
+	c.Send <- addr
+	OnGetIpcamsInfo(c.Send)
+
 	for {
-		_, b, err := ws.ReadMessage()
-		if err != nil {
-			glog.Errorln(err)
+		var command Command
+		if err := c.ReadJSON(&command); err != nil {
 			return
-		}
-		glog.Infoln("From one ctrl:", string(b))
-
-		if err = json.Unmarshal(b, &command); err != nil {
-			glog.Errorln(err)
-			continue
 		}
 
 		switch command.Name {
 		case "GetIpcamsInfo":
-			OnGetIpcamsInfo(send)
+			OnGetIpcamsInfo(c.Send)
 		case "CreateSignalingConnection":
-			go connectSignaling(config.SignalingUrl(command.Reciever), command.Camera, OnCreateSignalingConnection)
+			go OnCreateSignalingConnection(c.Center, &command)
 		case "ReconnectIpcam":
 			OnReconnectIpcam(command.Camera)
 		default:
-			glog.Errorln("Unknow command json:", string(b))
+			glog.Errorln("Unknow command json")
 		}
 	}
 }

@@ -12,12 +12,9 @@ var (
 	ipcamsMutex sync.Mutex
 )
 
-func InitAndRefreshIpcams() chan bool {
+func InitAndRefreshIpcams(quit chan bool) {
 	registryOfflines()
-
-	endRefreshIpcams := make(chan bool)
-	go registryOfflinesPeriod(endRefreshIpcams)
-	return endRefreshIpcams
+	registryOfflinesPeriod(quit)
 }
 
 func registryOfflines() {
@@ -29,14 +26,14 @@ func registryOfflines() {
 	}
 }
 
-func registryOfflinesPeriod(end chan bool) {
+func registryOfflinesPeriod(quit chan bool) {
 	ticker := time.NewTicker(config.PingPeriod)
 	defer func() {
 		ticker.Stop()
 	}()
 	for {
 		select {
-		case <-end:
+		case <-quit:
 			return
 		case <-ticker.C:
 			registryOfflines()

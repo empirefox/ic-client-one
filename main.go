@@ -2,8 +2,11 @@ package main
 
 import (
 	"flag"
+	"net/http"
+	"os"
 
 	"github.com/empirefox/ic-client-one-wrap"
+	"github.com/fvbock/endless"
 	"github.com/golang/glog"
 )
 
@@ -25,12 +28,18 @@ func InitConductor() {
 
 func main() {
 	flag.Parse()
+	center := NewCenter()
 	InitConductor()
-	endRefreshIpcams := InitAndRefreshIpcams()
+	go InitAndRefreshIpcams(center.Quit)
+	go CtrlConnect(center)
 
-	CtrlConnect()
+	http.HandleFunc("/register", serveRegister(center))
+	err := endless.ListenAndServe(":12301", nil)
+	if err != nil {
+		glog.Fatalln("ListenAndServe: ", err)
+	}
 
-	endRefreshIpcams <- true
+	center.Close()
 	conductor.Release()
-	glog.Infoln("quit now")
+	os.Exit(0)
 }

@@ -2,6 +2,8 @@ package main
 
 import (
 	"crypto/tls"
+	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/golang/glog"
@@ -11,10 +13,19 @@ import (
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  4096,
 	WriteBufferSize: 4096,
+	CheckOrigin:     checkOrigin,
 }
 
 var dailer = websocket.Dialer{
 	TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+}
+
+func checkOrigin(r *http.Request) bool {
+	u, err := url.Parse(r.Header["Origin"][0])
+	if err != nil {
+		return false
+	}
+	return u.Host == config.GetOrigin()
 }
 
 func connect(url string, handler func(*websocket.Conn)) {
@@ -27,29 +38,6 @@ func connect(url string, handler func(*websocket.Conn)) {
 	defer ws.Close()
 	glog.Infoln("connected ws to", url)
 	handler(ws)
-}
-
-func connectSignaling(url, id string, handler func(*websocket.Conn, string)) {
-	glog.Infoln("connect to", url)
-	ipcamUrl := ""
-	for _, ipcam := range config.Ipcams {
-		if ipcam.Id == id {
-			ipcamUrl = ipcam.Url
-			break
-		}
-	}
-	if ipcamUrl == "" {
-		glog.Errorln("Cannot find ipcam url")
-		return
-	}
-	ws, _, err := dailer.Dial(url, nil)
-	if err != nil {
-		glog.Errorln(err)
-		return
-	}
-	defer ws.Close()
-	glog.Infoln("connected ws to", ipcamUrl)
-	handler(ws, ipcamUrl)
 }
 
 func writing(ws *websocket.Conn, send chan []byte) {
