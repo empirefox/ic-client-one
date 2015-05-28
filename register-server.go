@@ -17,7 +17,7 @@ func serveRegister(center *Center) http.HandlerFunc {
 			http.Error(w, "Method not allowed", 405)
 			return
 		}
-		ws, err := upgrader.Upgrade(w, r, nil)
+		ws, err := center.Upgrader.Upgrade(w, r, nil)
 		if err != nil {
 			glog.Errorln(err)
 			return
@@ -45,17 +45,10 @@ func serveRegister(center *Center) http.HandlerFunc {
 				}
 				conn.Send <- status
 			case "SetSecretAddress":
-				OnSetSecretAddress(center, msg.Content)
+				center.OnSetSecretAddress(msg.Content)
 			default:
 				glog.Errorln("Unknow reg message")
 			}
 		}
 	}
-}
-
-func OnSetSecretAddress(center *Center, addr string) {
-	if err := config.SetSecretAddress(addr); err != nil {
-		return
-	}
-	center.CtrlConn.Close()
 }

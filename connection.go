@@ -22,7 +22,7 @@ func NewConn(center *Center, ws *websocket.Conn) *Connection {
 }
 
 func (ws Connection) WriteClose() (quitLoop bool) {
-	ticker := time.NewTicker(config.PingPeriod)
+	ticker := time.NewTicker(ws.Center.Conf.PingPeriod)
 	defer func() {
 		ticker.Stop()
 		ws.Close()

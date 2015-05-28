@@ -1,17 +1,23 @@
-package main
+package config
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strings"
 	"time"
 
 	"github.com/BurntSushi/toml"
+	"github.com/dchest/uniuri"
 	"github.com/golang/glog"
 )
 
-type ConfigIpcam struct {
-	Id     string `json:"id,omitempty"`
+var (
+	configFile = "./config.toml"
+)
+
+type Ipcam struct {
+	Id     string `json:"id,omitempty"      toml:"-"`
 	Name   string `json:"name,omitempty"`
 	Url    string `json:"-"`
 	Off    bool   `json:"off,omitempty"`
@@ -19,15 +25,43 @@ type ConfigIpcam struct {
 }
 
 type Config struct {
+	file          string `toml:"-"`
 	SecretAddress string
 	Secure        bool
 	Server        string // ip:port
 	PingPeriod    time.Duration
-	Ipcams        []ConfigIpcam
+	Ipcams        []Ipcam
+}
+
+func NewConfig() *Config {
+	return newConfig(configFile)
+}
+
+func newConfig(confFile string) *Config {
+	conf := &Config{file: confFile}
+	if err := conf.Load(); err != nil {
+		panic(err)
+	}
+	return conf
+}
+
+func (c *Config) Load() error {
+	if _, err := os.Stat(c.file); os.IsNotExist(err) {
+		glog.Errorln("no such file or directory: %s", c.file)
+		return nil
+	}
+	if _, err := toml.DecodeFile(c.file, c); err != nil {
+		glog.Errorln(err)
+		return err
+	}
+	for i := range c.Ipcams {
+		c.Ipcams[i].Id = uniuri.NewLen(16)
+	}
+	return nil
 }
 
 func (c *Config) Save() error {
-	file, err := os.Create(configFile)
+	file, err := os.Create(c.file)
 	if err != nil {
 		glog.Errorln(err)
 		return err
@@ -36,12 +70,27 @@ func (c *Config) Save() error {
 	if err != nil {
 		glog.Errorln(err)
 	}
-	return err
+	return nil
 }
 
-func (c *Config) SetSecretAddress(addr string) error {
+func (c *Config) SetAddr(addr string) error {
 	c.SecretAddress = addr
 	return c.Save()
+}
+
+func (c *Config) SaveIpcam(updated Ipcam) error {
+	if updated.Id == "" {
+		updated.Id = uniuri.NewLen(16)
+		c.Ipcams = append(c.Ipcams, updated)
+		return c.Save()
+	}
+	for i, ipcam := range c.Ipcams {
+		if updated.Id == ipcam.Id {
+			c.Ipcams[i] = updated
+			return c.Save()
+		}
+	}
+	return errors.New("Wrong ipcam to save")
 }
 
 func (c *Config) GetIpcamUrl(id string) string {

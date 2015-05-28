@@ -17,7 +17,7 @@ type Signal struct {
 
 func OnCreateSignalingConnection(center *Center, cmd *Command) {
 	glog.Infoln("connect to", cmd.Camera)
-	ws, _, err := dailer.Dial(config.SignalingUrl(cmd.Reciever), nil)
+	ws, _, err := center.Dialer.Dial(center.Conf.SignalingUrl(cmd.Reciever), nil)
 	if err != nil {
 		glog.Errorln(err)
 		return
@@ -26,11 +26,11 @@ func OnCreateSignalingConnection(center *Center, cmd *Command) {
 	glog.Infoln("connected")
 	conn := NewConn(center, ws)
 	go conn.WriteClose()
-	onSignalingConnected(conn, config.GetIpcamUrl(cmd.Camera))
+	onSignalingConnected(conn, center.Conf.GetIpcamUrl(cmd.Camera))
 }
 
 func onSignalingConnected(conn *Connection, url string) {
-	var pc *rtc.PeerConn
+	var pc rtc.PeerConn
 	defer func() {
 		if pc != nil {
 			pc.Delete()
@@ -47,7 +47,7 @@ func onSignalingConnected(conn *Connection, url string) {
 		switch signal.Type {
 		case "offer":
 			if pc == nil {
-				pc = conductor.CreatePeer(url, conn.Send)
+				pc = conn.Center.Conductor.CreatePeer(url, conn.Send)
 				pc.CreateAnswer(signal.Sdp)
 			}
 		case "candidate":

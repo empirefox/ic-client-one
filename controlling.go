@@ -18,7 +18,7 @@ func CtrlConnect(center *Center) {
 }
 
 func ctrlConnectLoop(center *Center) (quitLoop bool) {
-	ws, _, err := dailer.Dial(config.CtrlUrl(), nil)
+	ws, _, err := center.Dialer.Dial(center.Conf.CtrlUrl(), nil)
 	if err != nil {
 		glog.Errorln(err)
 		center.ChangeStatus <- "unreachable"
@@ -39,7 +39,7 @@ func ctrlConnectLoop(center *Center) (quitLoop bool) {
 }
 
 func onCtrlConnected(c *Connection) {
-	addr := config.GetAddr()
+	addr := c.Center.Conf.GetAddr()
 	if len(addr) == 0 {
 		c.Center.ChangeStatus <- "not_authed"
 		return
@@ -48,7 +48,7 @@ func onCtrlConnected(c *Connection) {
 	defer func() { c.Center.ChangeStatus <- "not_ready" }()
 	// login
 	c.Send <- addr
-	OnGetIpcamsInfo(c.Send)
+	c.Center.OnGetIpcamsInfo(c.Send)
 
 	for {
 		var command Command
@@ -58,11 +58,13 @@ func onCtrlConnected(c *Connection) {
 
 		switch command.Name {
 		case "GetIpcamsInfo":
-			OnGetIpcamsInfo(c.Send)
+			c.Center.OnGetIpcamsInfo(c.Send)
+		case "SaveIpcam":
+			c.Center.OnSaveIpcam(command, c.Send)
 		case "CreateSignalingConnection":
 			go OnCreateSignalingConnection(c.Center, &command)
 		case "ReconnectIpcam":
-			OnReconnectIpcam(command.Camera)
+			c.Center.OnReconnectIpcam(command.Camera)
 		default:
 			glog.Errorln("Unknow command json")
 		}
