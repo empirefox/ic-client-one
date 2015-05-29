@@ -1,8 +1,13 @@
-package main
+package signaling
 
 import (
-	"github.com/empirefox/ic-client-one-wrap"
+	"encoding/json"
+
 	"github.com/golang/glog"
+
+	"github.com/empirefox/ic-client-one-wrap"
+	. "github.com/empirefox/ic-client-one/center"
+	. "github.com/empirefox/ic-client-one/utils"
 )
 
 type Signal struct {
@@ -15,18 +20,30 @@ type Signal struct {
 	Sdp string `json:"sdp,omitempty"`
 }
 
+type SubSignalCommand struct {
+	Camera   string `json:"camera,omitempty"`
+	Reciever string `json:"reciever,omitempty"`
+}
+
+// Content => SubSignalCommand
 func OnCreateSignalingConnection(center *Center, cmd *Command) {
-	glog.Infoln("connect to", cmd.Camera)
-	ws, _, err := center.Dialer.Dial(center.Conf.SignalingUrl(cmd.Reciever), nil)
+	var sub SubSignalCommand
+	if err := json.Unmarshal([]byte(cmd.Content), &sub); err != nil {
+		center.CtrlConn.Send <- GenInfoMessage(cmd.From, "Cannot parse SubSignalCommand")
+		return
+	}
+	glog.Infoln("connect to", sub.Camera)
+	ws, _, err := center.Dialer.Dial(center.Conf.SignalingUrl(sub.Reciever), nil)
 	if err != nil {
 		glog.Errorln(err)
+		center.CtrlConn.Send <- GenInfoMessage(cmd.From, "Dial signaling failed")
 		return
 	}
 	defer ws.Close()
 	glog.Infoln("connected")
 	conn := NewConn(center, ws)
 	go conn.WriteClose()
-	onSignalingConnected(conn, center.Conf.GetIpcamUrl(cmd.Camera))
+	onSignalingConnected(conn, center.Conf.GetIpcamUrl(sub.Camera))
 }
 
 func onSignalingConnected(conn *Connection, url string) {

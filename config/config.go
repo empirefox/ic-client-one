@@ -84,8 +84,8 @@ func (c *Config) SaveIpcam(updated Ipcam) error {
 		c.Ipcams = append(c.Ipcams, updated)
 		return c.Save()
 	}
-	for i, ipcam := range c.Ipcams {
-		if updated.Id == ipcam.Id {
+	for i := range c.Ipcams {
+		if updated.Id == c.Ipcams[i].Id {
 			c.Ipcams[i] = updated
 			return c.Save()
 		}
@@ -93,10 +93,19 @@ func (c *Config) SaveIpcam(updated Ipcam) error {
 	return errors.New("Wrong ipcam to save")
 }
 
+func (c *Config) GetIpcam(id string) (*Ipcam, error) {
+	for i := range c.Ipcams {
+		if c.Ipcams[i].Id == id {
+			return &c.Ipcams[i], nil
+		}
+	}
+	return nil, errors.New("Cannot find ipcam")
+}
+
 func (c *Config) GetIpcamUrl(id string) string {
-	for _, ipcam := range c.Ipcams {
-		if ipcam.Id == id {
-			return ipcam.Url
+	for i := range c.Ipcams {
+		if c.Ipcams[i].Id == id {
+			return c.Ipcams[i].Url
 		}
 	}
 	glog.Errorln("Cannot find ipcam url")

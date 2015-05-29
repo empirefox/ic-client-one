@@ -4,6 +4,9 @@ import (
 	"flag"
 	"net/http"
 
+	"github.com/empirefox/ic-client-one/center"
+	"github.com/empirefox/ic-client-one/controlling"
+	"github.com/empirefox/ic-client-one/register"
 	"github.com/fvbock/endless"
 	"github.com/golang/glog"
 )
@@ -14,15 +17,15 @@ func init() {
 
 func main() {
 	flag.Parse()
-	center := NewCenter()
-	center.Start()
-	go CtrlConnect(center)
+	c := center.NewCenter()
+	c.Start()
+	defer c.Close()
 
-	http.HandleFunc("/register", serveRegister(center))
+	go controlling.CtrlConnect(c)
+
+	http.HandleFunc("/register", register.ServeRegister(c))
 	err := endless.ListenAndServe(":12301", nil)
 	if err != nil {
 		glog.Fatalln("ListenAndServe: ", err)
 	}
-
-	center.Close()
 }

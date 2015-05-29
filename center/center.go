@@ -1,4 +1,4 @@
-package main
+package center
 
 import (
 	"crypto/tls"
@@ -8,11 +8,20 @@ import (
 	"sync"
 	"time"
 
-	"github.com/empirefox/ic-client-one-wrap"
-	. "github.com/empirefox/ic-client-one/config"
 	"github.com/golang/glog"
 	"github.com/gorilla/websocket"
+
+	"github.com/empirefox/ic-client-one-wrap"
+	. "github.com/empirefox/ic-client-one/config"
+	. "github.com/empirefox/ic-client-one/utils"
 )
+
+// From One: "ManageGetIpcam", "ManageSetIpcam", "ManageReconnectIpcam"
+type Command struct {
+	From    uint   `json:"from"`
+	Name    string `json:"name"`
+	Content string `json:"content"`
+}
 
 type Center struct {
 	status               string
@@ -23,6 +32,7 @@ type Center struct {
 	Quit                 chan bool
 	QuitWaitGroup        sync.WaitGroup
 	CtrlConn             *Connection
+	ctrlConnMutex        sync.Mutex
 	Conf                 Config
 	Upgrader             websocket.Upgrader
 	Dialer               websocket.Dialer
@@ -113,8 +123,8 @@ func (center *Center) onRegistryOfflines() {
 		changed = !cam.Online && isOnline
 		cam.Online = isOnline
 	}
-	if changed && center.CtrlConn != nil {
-		center.OnGetIpcamsInfo(center.CtrlConn.Send)
+	if changed {
+		center.OnGetIpcams()
 	}
 }
 
@@ -132,6 +142,7 @@ func (center *Center) Run() {
 
 func (center *Center) Close() {
 	close(center.Quit)
+	center.QuitWaitGroup.Wait()
 }
 
 func (center *Center) GetStatus() ([]byte, error) {
@@ -140,16 +151,20 @@ func (center *Center) GetStatus() ([]byte, error) {
 }
 
 func (center *Center) AddCtrlConn(c *Connection) {
+	center.ctrlConnMutex.Lock()
+	defer center.ctrlConnMutex.Unlock()
 	center.CtrlConn = c
 	center.AddStatusReciever <- c
 }
 
 func (center *Center) RemoveCtrlConn() {
+	center.ctrlConnMutex.Lock()
+	defer center.ctrlConnMutex.Unlock()
 	center.RemoveStatusReciever <- center.CtrlConn
 	center.CtrlConn = nil
 }
 
-func (center *Center) OnGetIpcamsInfo(send chan []byte) {
+func (center *Center) OnGetIpcams() {
 	ipcams := make(map[string]Ipcam, len(center.Conf.Ipcams))
 	for _, ipcam := range center.Conf.Ipcams {
 		ipcams[ipcam.Id] = ipcam
@@ -159,20 +174,30 @@ func (center *Center) OnGetIpcamsInfo(send chan []byte) {
 		glog.Errorln(err)
 		return
 	}
-	glog.Infoln("send IpcamsInfo")
-	// Give a type header
-	send <- append([]byte("one:IpcamsInfo:"), info...)
+
+	center.ctrlConnMutex.Lock()
+	defer center.ctrlConnMutex.Unlock()
+	if center.CtrlConn == nil {
+		glog.Errorln("No control connection")
+		return
+	}
+	center.CtrlConn.Send <- append([]byte("one:Ipcams:"), info...)
 }
 
-func (center *Center) OnReconnectIpcam(id string) {
+// Content => id
+func (center *Center) OnManageReconnectIpcam(cmd *Command) {
 	for i, _ := range center.Conf.Ipcams {
-		if cam := &center.Conf.Ipcams[i]; cam.Id == id {
+		if cam := &center.Conf.Ipcams[i]; cam.Id == cmd.Content {
 			cam.Online = !cam.Off && center.Conductor.Registry(cam.Url)
-			if cam.Online && center.CtrlConn != nil {
-				center.OnGetIpcamsInfo(center.CtrlConn.Send)
+			if cam.Online {
+				center.OnGetIpcams()
+				return
 			}
+			center.CtrlConn.Send <- GenInfoMessage(cmd.From, "Failed to reconnect ipcam")
+			return
 		}
 	}
+	center.CtrlConn.Send <- GenInfoMessage(cmd.From, "Cannot find ipcam")
 }
 
 func (center *Center) OnSetSecretAddress(addr string) {
@@ -182,14 +207,31 @@ func (center *Center) OnSetSecretAddress(addr string) {
 	center.CtrlConn.Close()
 }
 
-func (center *Center) OnSaveIpcam(cmd Command, send chan []byte) {
+// Content => id
+func (center *Center) OnManageGetIpcam(cmd *Command) {
+	ipcam, err := center.Conf.GetIpcam(cmd.Content)
+	if err != nil {
+		center.CtrlConn.Send <- GenInfoMessage(cmd.From, "Cannot get ipcam")
+		return
+	}
+	msg, err := GenCtrlResMessage(cmd.From, cmd.Name, GetManaged(ipcam))
+	if err != nil {
+		center.CtrlConn.Send <- GenInfoMessage(cmd.From, "Cannot get ipcam content")
+		return
+	}
+	center.CtrlConn.Send <- msg
+}
+
+// Content => Ipcam
+func (center *Center) OnManageSetIpcam(cmd *Command) {
 	var ipcam Ipcam
-	if err := json.Unmarshal([]byte(cmd.Camera), &ipcam); err != nil {
-		glog.Errorln(err)
+	if err := json.Unmarshal([]byte(cmd.Content), &ipcam); err != nil {
+		center.CtrlConn.Send <- GenInfoMessage(cmd.From, "Cannot parse ipcam")
 		return
 	}
 	if err := center.Conf.SaveIpcam(ipcam); err != nil {
-		glog.Errorln(err)
+		center.CtrlConn.Send <- GenInfoMessage(cmd.From, "Cannot get ipcam")
+		return
 	}
-	center.OnGetIpcamsInfo(send)
+	center.OnGetIpcams()
 }

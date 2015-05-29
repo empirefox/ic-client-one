@@ -1,16 +1,13 @@
-package main
+package controlling
 
 import (
 	"time"
 
 	"github.com/golang/glog"
-)
 
-type Command struct {
-	Name     string `json:"name"`
-	Reciever string `json:"reciever"`
-	Camera   string `json:"camera"`
-}
+	. "github.com/empirefox/ic-client-one/center"
+	"github.com/empirefox/ic-client-one/signaling"
+)
 
 func CtrlConnect(center *Center) {
 	for !ctrlConnectLoop(center) {
@@ -48,23 +45,25 @@ func onCtrlConnected(c *Connection) {
 	defer func() { c.Center.ChangeStatus <- "not_ready" }()
 	// login
 	c.Send <- addr
-	c.Center.OnGetIpcamsInfo(c.Send)
+	c.Center.OnGetIpcams()
 
 	for {
-		var command Command
-		if err := c.ReadJSON(&command); err != nil {
+		var cmd Command
+		if err := c.ReadJSON(&cmd); err != nil {
 			return
 		}
 
-		switch command.Name {
-		case "GetIpcamsInfo":
-			c.Center.OnGetIpcamsInfo(c.Send)
-		case "SaveIpcam":
-			c.Center.OnSaveIpcam(command, c.Send)
+		switch cmd.Name {
+		case "GetIpcams":
+			c.Center.OnGetIpcams()
+		case "ManageGetIpcam":
+			c.Center.OnManageGetIpcam(&cmd)
+		case "ManageSetIpcam":
+			c.Center.OnManageSetIpcam(&cmd)
+		case "ManageReconnectIpcam":
+			c.Center.OnManageReconnectIpcam(&cmd)
 		case "CreateSignalingConnection":
-			go OnCreateSignalingConnection(c.Center, &command)
-		case "ReconnectIpcam":
-			c.Center.OnReconnectIpcam(command.Camera)
+			go signaling.OnCreateSignalingConnection(c.Center, &cmd)
 		default:
 			glog.Errorln("Unknow command json")
 		}

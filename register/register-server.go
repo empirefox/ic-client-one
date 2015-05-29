@@ -1,9 +1,11 @@
-package main
+package register
 
 import (
 	"net/http"
 
 	"github.com/golang/glog"
+
+	. "github.com/empirefox/ic-client-one/center"
 )
 
 type RegMessage struct {
@@ -11,7 +13,7 @@ type RegMessage struct {
 	Content string `json:"content,omitempty"`
 }
 
-func serveRegister(center *Center) http.HandlerFunc {
+func ServeRegister(center *Center) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "GET" {
 			http.Error(w, "Method not allowed", 405)
