@@ -37,6 +37,10 @@ func NewConfig() *Config {
 	return newConfig(configFile)
 }
 
+func NewConfigFile(confFile string) *Config {
+	return newConfig(confFile)
+}
+
 func newConfig(confFile string) *Config {
 	conf := &Config{file: confFile}
 	if err := conf.Load(); err != nil {

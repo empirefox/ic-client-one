@@ -15,6 +15,10 @@ type ManageIpcam struct {
 	Online bool   `json:"online,omitempty"`
 }
 
+func (ipcam *ManageIpcam) Get() Ipcam {
+	return Ipcam{ipcam.Id, ipcam.Name, ipcam.Url, ipcam.Off, ipcam.Online}
+}
+
 func GetManaged(ipcam *Ipcam) *ManageIpcam {
 	return &ManageIpcam{ipcam.Id, ipcam.Name, ipcam.Url, ipcam.Off, ipcam.Online}
 }

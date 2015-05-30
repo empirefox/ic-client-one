@@ -1,14 +1,30 @@
 package center
 
 import (
+	"net/http"
 	"time"
 
 	"github.com/golang/glog"
 	"github.com/gorilla/websocket"
 )
 
+type Upgrader interface {
+	Upgrade(w http.ResponseWriter, r *http.Request, responseHeader http.Header) (*websocket.Conn, error)
+}
+
+type Dialer interface {
+	Dial(urlStr string, requestHeader http.Header) (*websocket.Conn, *http.Response, error)
+}
+
+type Conn interface {
+	ReadMessage() (messageType int, p []byte, err error)
+	WriteMessage(messageType int, data []byte) error
+	ReadJSON(v interface{}) error
+	Close() error
+}
+
 type Connection struct {
-	*websocket.Conn
+	Conn
 	Send   chan []byte
 	Center *Center
 }

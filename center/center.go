@@ -34,8 +34,8 @@ type Center struct {
 	CtrlConn             *Connection
 	ctrlConnMutex        sync.Mutex
 	Conf                 Config
-	Upgrader             websocket.Upgrader
-	Dialer               websocket.Dialer
+	Upgrader             Upgrader
+	Dialer               Dialer
 	Conductor            rtc.Conductor
 }
 
@@ -56,12 +56,12 @@ func NewCenter() *Center {
 		ChangeStatus:         make(chan string),
 		Quit:                 make(chan bool),
 		Conf:                 *conf,
-		Upgrader: websocket.Upgrader{
+		Upgrader: &websocket.Upgrader{
 			ReadBufferSize:  4096,
 			WriteBufferSize: 4096,
 			CheckOrigin:     checkOrigin,
 		},
-		Dialer: websocket.Dialer{
+		Dialer: &websocket.Dialer{
 			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 		},
 		Conductor: rtc.NewConductor(),
@@ -224,12 +224,12 @@ func (center *Center) OnManageGetIpcam(cmd *Command) {
 
 // Content => Ipcam
 func (center *Center) OnManageSetIpcam(cmd *Command) {
-	var ipcam Ipcam
+	var ipcam ManageIpcam
 	if err := json.Unmarshal([]byte(cmd.Content), &ipcam); err != nil {
 		center.CtrlConn.Send <- GenInfoMessage(cmd.From, "Cannot parse ipcam")
 		return
 	}
-	if err := center.Conf.SaveIpcam(ipcam); err != nil {
+	if err := center.Conf.SaveIpcam(ipcam.Get()); err != nil {
 		center.CtrlConn.Send <- GenInfoMessage(cmd.From, "Cannot get ipcam")
 		return
 	}

@@ -44,7 +44,7 @@ func onCtrlConnected(c *Connection) {
 	c.Center.ChangeStatus <- "ready"
 	defer func() { c.Center.ChangeStatus <- "not_ready" }()
 	// login
-	c.Send <- addr
+	c.Send <- append([]byte("addr:"), addr...)
 	c.Center.OnGetIpcams()
 
 	for {
