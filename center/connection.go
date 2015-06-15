@@ -16,7 +16,7 @@ type Dialer interface {
 	Dial(urlStr string, requestHeader http.Header) (*websocket.Conn, *http.Response, error)
 }
 
-type Conn interface {
+type Ws interface {
 	ReadMessage() (messageType int, p []byte, err error)
 	WriteMessage(messageType int, data []byte) error
 	ReadJSON(v interface{}) error
@@ -24,14 +24,14 @@ type Conn interface {
 }
 
 type Connection struct {
-	Conn
+	Ws
 	Send   chan []byte
 	Center *Center
 }
 
 func NewConn(center *Center, ws *websocket.Conn) *Connection {
 	return &Connection{
-		Conn:   ws,
+		Ws:     ws,
 		Send:   make(chan []byte, 64),
 		Center: center,
 	}

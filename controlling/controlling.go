@@ -22,7 +22,6 @@ func ctrlConnectLoop(center *Center) (quitLoop bool) {
 		time.Sleep(time.Second * 10)
 		return
 	}
-	defer ws.Close()
 
 	conn := NewConn(center, ws)
 	center.AddCtrlConn(conn)
@@ -36,6 +35,7 @@ func ctrlConnectLoop(center *Center) (quitLoop bool) {
 }
 
 func onCtrlConnected(c *Connection) {
+	defer c.Close()
 	addr := c.Center.Conf.GetAddr()
 	if len(addr) == 0 {
 		c.Center.ChangeStatus <- "not_authed"

@@ -24,9 +24,9 @@ func ServeRegister(center *Center) http.HandlerFunc {
 			glog.Errorln(err)
 			return
 		}
-		defer ws.Close()
-
 		conn := NewConn(center, ws)
+		defer close(conn.Send)
+
 		center.AddStatusReciever <- conn
 		defer func() { center.RemoveStatusReciever <- conn }()
 

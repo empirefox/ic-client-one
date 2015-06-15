@@ -33,6 +33,6 @@ func (c *fakeWsConn) Close() error {
 	return nil
 }
 
-func newFakeWsConn(msgType int, msg string) Conn {
+func newFakeWsConn(msgType int, msg string) Ws {
 	return &fakeWsConn{MsgType: msgType, RecieveStr: []byte(msg)}
 }

@@ -23,7 +23,7 @@ func (fakeDialer) Dial(urlStr string, requestHeader http.Header) (*websocket.Con
 
 func newFakeConn(center *Center, msg string) *Connection {
 	return &Connection{
-		Conn:   newFakeWsConn(websocket.TextMessage, msg),
+		Ws:     newFakeWsConn(websocket.TextMessage, msg),
 		Send:   make(chan []byte),
 		Center: center,
 	}

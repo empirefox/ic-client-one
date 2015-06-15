@@ -91,8 +91,7 @@ func (center *Center) run() {
 			center.statusReciever[c] = true
 		case c := <-center.RemoveStatusReciever:
 			if _, ok := center.statusReciever[c]; ok {
-				delete(center.statusReciever, c)
-				close(c.Send)
+				center.removeStatusReciever(c)
 			}
 		case center.status = <-center.ChangeStatus:
 			status, err := center.GetStatus()
@@ -103,8 +102,7 @@ func (center *Center) run() {
 				select {
 				case c.Send <- status:
 				default:
-					close(c.Send)
-					delete(center.statusReciever, c)
+					center.removeStatusReciever(c)
 				}
 			}
 		case <-ticker.C:
@@ -113,6 +111,12 @@ func (center *Center) run() {
 			return
 		}
 	}
+}
+
+func (center *Center) removeStatusReciever(c *Connection) {
+	defer func() { recover() }()
+	delete(center.statusReciever, c)
+	close(c.Send)
 }
 
 func (center *Center) onRegistryOfflines() {
