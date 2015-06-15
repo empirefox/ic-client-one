@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/BurntSushi/toml"
@@ -114,10 +113,6 @@ func (c *Config) GetIpcamUrl(id string) string {
 	}
 	glog.Errorln("Cannot find ipcam url")
 	return ""
-}
-
-func (c *Config) GetOrigin() string {
-	return strings.Split(c.Server, ":")[0]
 }
 
 func (c *Config) GetAddr() []byte {

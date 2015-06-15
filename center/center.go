@@ -46,7 +46,7 @@ func NewCenter() *Center {
 		if err != nil {
 			return false
 		}
-		return u.Host == conf.GetOrigin()
+		return u.Host == conf.Server
 	}
 
 	return &Center{
@@ -137,7 +137,7 @@ func (center *Center) Run() {
 	defer center.QuitWaitGroup.Done()
 	center.preRun()
 	defer center.postRun()
-	center.Run()
+	center.run()
 }
 
 func (center *Center) Close() {
