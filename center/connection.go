@@ -40,6 +40,10 @@ func NewConn(center *Center, ws *websocket.Conn) *Connection {
 func (ws Connection) WriteClose() (quitLoop bool) {
 	ticker := time.NewTicker(ws.Center.Conf.PingPeriod)
 	defer func() {
+		glog.Infoln("ws closing")
+		if err := recover(); err != nil {
+			glog.Errorln(err)
+		}
 		ticker.Stop()
 		ws.Close()
 	}()
@@ -48,14 +52,16 @@ func (ws Connection) WriteClose() (quitLoop bool) {
 		case msg, ok := <-ws.Send:
 			if !ok {
 				ws.WriteMessage(websocket.CloseMessage, []byte{})
+				glog.Infoln("ws send closing")
 				return
 			}
 			if err := ws.WriteMessage(websocket.TextMessage, msg); err != nil {
+				glog.Infoln("ws send error:", string(msg), err)
 				return
 			}
-			glog.Infoln("ws send ", string(msg))
 		case <-ticker.C:
 			if err := ws.WriteMessage(websocket.PingMessage, []byte{}); err != nil {
+				glog.Infoln("ws send ping error", err)
 				return
 			}
 		case <-ws.Center.Quit:

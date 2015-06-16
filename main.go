@@ -7,7 +7,6 @@ import (
 	"github.com/empirefox/ic-client-one/center"
 	"github.com/empirefox/ic-client-one/controlling"
 	"github.com/empirefox/ic-client-one/register"
-	"github.com/fvbock/endless"
 	"github.com/golang/glog"
 )
 
@@ -24,7 +23,7 @@ func main() {
 	go controlling.CtrlConnect(c)
 
 	http.HandleFunc("/register", register.ServeRegister(c))
-	err := endless.ListenAndServe(":12301", nil)
+	err := http.ListenAndServe(":12301", nil)
 	if err != nil {
 		glog.Fatalln("ListenAndServe: ", err)
 	}

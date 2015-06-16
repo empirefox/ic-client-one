@@ -51,8 +51,8 @@ func NewCenter() *Center {
 
 	return &Center{
 		statusReciever:       make(map[*Connection]bool),
-		AddStatusReciever:    make(chan *Connection),
-		RemoveStatusReciever: make(chan *Connection),
+		AddStatusReciever:    make(chan *Connection, 1),
+		RemoveStatusReciever: make(chan *Connection, 1),
 		ChangeStatus:         make(chan string),
 		Quit:                 make(chan bool),
 		Conf:                 *conf,
@@ -69,6 +69,7 @@ func NewCenter() *Center {
 }
 
 func (center *Center) preRun() {
+	glog.Infoln("preRun")
 	center.onRegistryOfflines()
 	center.Conductor.AddIceServer("stun:stun.l.google.com:19302", "", "")
 	center.Conductor.AddIceServer("stun:stun.anyfirewall.com:3478", "", "")
@@ -77,10 +78,12 @@ func (center *Center) preRun() {
 }
 
 func (center *Center) postRun() {
+	glog.Infoln("postRun")
 	center.Conductor.Release()
 }
 
 func (center *Center) run() {
+	glog.Infoln("run")
 	ticker := time.NewTicker(center.Conf.PingPeriod)
 	defer func() {
 		ticker.Stop()
@@ -120,16 +123,20 @@ func (center *Center) removeStatusReciever(c *Connection) {
 }
 
 func (center *Center) onRegistryOfflines() {
+	glog.Infoln("onRegistryOfflines")
 	var changed = false
 	for i, _ := range center.Conf.Ipcams {
 		cam := &center.Conf.Ipcams[i]
+		glog.Infoln("Registry", cam.Url)
 		isOnline := cam.Online || (!cam.Off && center.Conductor.Registry(cam.Url))
+		glog.Infoln("Registry ok")
 		changed = !cam.Online && isOnline
 		cam.Online = isOnline
 	}
 	if changed {
 		center.OnGetIpcams()
 	}
+	glog.Infoln("onRegistryOfflines ok")
 }
 
 func (center *Center) Start() {
@@ -169,6 +176,7 @@ func (center *Center) RemoveCtrlConn() {
 }
 
 func (center *Center) OnGetIpcams() {
+	glog.Infoln("OnGetIpcams")
 	ipcams := make(map[string]Ipcam, len(center.Conf.Ipcams))
 	for _, ipcam := range center.Conf.Ipcams {
 		ipcams[ipcam.Id] = ipcam
@@ -179,13 +187,17 @@ func (center *Center) OnGetIpcams() {
 		return
 	}
 
+	glog.Infoln("ctrlConnMutex locking")
 	center.ctrlConnMutex.Lock()
+	glog.Infoln("ctrlConnMutex locked")
 	defer center.ctrlConnMutex.Unlock()
 	if center.CtrlConn == nil {
 		glog.Errorln("No control connection")
 		return
 	}
+	glog.Infoln("CtrlConn.Send")
 	center.CtrlConn.Send <- append([]byte("one:Ipcams:"), info...)
+	glog.Infoln("OnGetIpcams ok")
 }
 
 // Content => id

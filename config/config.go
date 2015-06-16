@@ -20,7 +20,7 @@ type Ipcam struct {
 	Name   string `json:"name,omitempty"`
 	Url    string `json:"-"`
 	Off    bool   `json:"off,omitempty"`
-	Online bool   `json:"online,omitempty"`
+	Online bool   `json:"online,omitempty"  toml:"-"`
 }
 
 type Config struct {

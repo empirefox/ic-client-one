@@ -40,7 +40,6 @@ func OnCreateSignalingConnection(center *Center, cmd *Command) {
 		return
 	}
 	defer ws.Close()
-	glog.Infoln("connected")
 	conn := NewConn(center, ws)
 	go conn.WriteClose()
 	onSignalingConnected(conn, center.Conf.GetIpcamUrl(sub.Camera))
@@ -49,6 +48,7 @@ func OnCreateSignalingConnection(center *Center, cmd *Command) {
 func onSignalingConnected(conn *Connection, url string) {
 	var pc rtc.PeerConn
 	defer func() {
+		glog.Infoln("onSignalingConnected finished")
 		if pc != nil {
 			pc.Delete()
 		}
@@ -64,14 +64,15 @@ func onSignalingConnected(conn *Connection, url string) {
 		switch signal.Type {
 		case "offer":
 			if pc == nil {
+				glog.Infoln("creating peer")
 				pc = conn.Center.Conductor.CreatePeer(url, conn.Send)
 				pc.CreateAnswer(signal.Sdp)
 			}
 		case "candidate":
-			if pc == nil {
-				return
+			if pc != nil {
+				glog.Infoln("add candidate")
+				pc.AddCandidate(signal.Candidate, signal.Mid, signal.Line)
 			}
-			pc.AddCandidate(signal.Candidate, signal.Mid, signal.Line)
 		default:
 			glog.Errorln("Unknow signal json")
 		}
