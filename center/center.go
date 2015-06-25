@@ -128,7 +128,8 @@ func (center *Center) onRegistryOfflines() {
 	for i, _ := range center.Conf.Ipcams {
 		cam := &center.Conf.Ipcams[i]
 		glog.Infoln("Registry", cam.Url)
-		isOnline := cam.Online || (!cam.Off && center.Conductor.Registry(cam.Url))
+		isOnline := cam.Online || (!cam.Off &&
+			center.Conductor.Registry(cam.Url, cam.GetRecName(&center.Conf), cam.Rec))
 		glog.Infoln("Registry ok")
 		changed = !cam.Online && isOnline
 		cam.Online = isOnline
@@ -204,7 +205,8 @@ func (center *Center) OnGetIpcams() {
 func (center *Center) OnManageReconnectIpcam(cmd *Command) {
 	for i, _ := range center.Conf.Ipcams {
 		if cam := &center.Conf.Ipcams[i]; cam.Id == cmd.Content {
-			cam.Online = !cam.Off && center.Conductor.Registry(cam.Url)
+			cam.Online = !cam.Off &&
+				center.Conductor.Registry(cam.Url, cam.GetRecName(&center.Conf), cam.Rec)
 			if cam.Online {
 				center.OnGetIpcams()
 				return

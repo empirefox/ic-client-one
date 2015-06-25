@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path"
 	"time"
 
 	"github.com/BurntSushi/toml"
@@ -19,12 +20,18 @@ type Ipcam struct {
 	Id     string `json:"id,omitempty"      toml:"-"`
 	Name   string `json:"name,omitempty"`
 	Url    string `json:"-"`
+	Rec    bool   `json:"-"`
 	Off    bool   `json:"off,omitempty"`
 	Online bool   `json:"online,omitempty"  toml:"-"`
 }
 
+func (i *Ipcam) GetRecName(conf *Config) string {
+	return path.Join(conf.RecDir, i.Name)
+}
+
 type Config struct {
 	file          string `toml:"-"`
+	RecDir        string
 	SecretAddress string
 	Secure        bool
 	Server        string // ip:port
@@ -43,6 +50,10 @@ func NewConfigFile(confFile string) *Config {
 func newConfig(confFile string) *Config {
 	conf := &Config{file: confFile}
 	if err := conf.Load(); err != nil {
+		panic(err)
+	}
+	err := os.MkdirAll(conf.RecDir, os.ModePerm)
+	if err != nil {
 		panic(err)
 	}
 	return conf
