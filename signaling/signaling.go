@@ -50,7 +50,7 @@ func onSignalingConnected(conn *Connection, url string) {
 	defer func() {
 		glog.Infoln("onSignalingConnected finished")
 		if pc != nil {
-			pc.Delete()
+			conn.Center.Conductor.DeletePeer(pc)
 		}
 	}()
 
