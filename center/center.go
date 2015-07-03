@@ -123,14 +123,11 @@ func (center *Center) removeStatusReciever(c *Connection) {
 }
 
 func (center *Center) onRegistryOfflines() {
-	glog.Infoln("onRegistryOfflines")
 	var changed = false
 	for i, _ := range center.Conf.Ipcams {
 		cam := &center.Conf.Ipcams[i]
-		glog.Infoln("Registry", cam.Url)
 		isOnline := cam.Online || (!cam.Off &&
 			center.Conductor.Registry(cam.Url, cam.GetRecName(&center.Conf), cam.Rec))
-		glog.Infoln("Registry ok")
 		changed = !cam.Online && isOnline
 		cam.Online = isOnline
 	}
@@ -138,6 +135,16 @@ func (center *Center) onRegistryOfflines() {
 		center.OnGetIpcams()
 	}
 	glog.Infoln("onRegistryOfflines ok")
+}
+
+func (center *Center) CreatePeer(url string, conn *Connection) (rtc.PeerConn, bool) {
+	for i, _ := range center.Conf.Ipcams {
+		cam := &center.Conf.Ipcams[i]
+		if cam.Online && cam.Url == url {
+			return center.Conductor.CreatePeer(url, conn.Send), true
+		}
+	}
+	return nil, false
 }
 
 func (center *Center) Start() {
@@ -177,7 +184,6 @@ func (center *Center) RemoveCtrlConn() {
 }
 
 func (center *Center) OnGetIpcams() {
-	glog.Infoln("OnGetIpcams")
 	ipcams := make(map[string]Ipcam, len(center.Conf.Ipcams))
 	for _, ipcam := range center.Conf.Ipcams {
 		ipcams[ipcam.Id] = ipcam
@@ -188,15 +194,12 @@ func (center *Center) OnGetIpcams() {
 		return
 	}
 
-	glog.Infoln("ctrlConnMutex locking")
 	center.ctrlConnMutex.Lock()
-	glog.Infoln("ctrlConnMutex locked")
 	defer center.ctrlConnMutex.Unlock()
 	if center.CtrlConn == nil {
 		glog.Errorln("No control connection")
 		return
 	}
-	glog.Infoln("CtrlConn.Send")
 	center.CtrlConn.Send <- append([]byte("one:Ipcams:"), info...)
 	glog.Infoln("OnGetIpcams ok")
 }

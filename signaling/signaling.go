@@ -50,6 +50,7 @@ func onSignalingConnected(conn *Connection, url string) {
 	defer func() {
 		glog.Infoln("onSignalingConnected finished")
 		if pc != nil {
+			glog.Infoln("deleting peer")
 			conn.Center.Conductor.DeletePeer(pc)
 		}
 	}()
@@ -65,7 +66,12 @@ func onSignalingConnected(conn *Connection, url string) {
 		case "offer":
 			if pc == nil {
 				glog.Infoln("creating peer")
-				pc = conn.Center.Conductor.CreatePeer(url, conn.Send)
+				var ok = false
+				pc, ok = conn.Center.CreatePeer(url, conn)
+				if !ok {
+					pc = nil
+					return
+				}
 				pc.CreateAnswer(signal.Sdp)
 			}
 		case "candidate":
