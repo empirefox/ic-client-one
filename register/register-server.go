@@ -2,6 +2,7 @@ package register
 
 import (
 	"net/http"
+	"syscall"
 
 	"github.com/golang/glog"
 
@@ -15,10 +16,6 @@ type RegMessage struct {
 
 func ServeRegister(center *Center) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "GET" {
-			http.Error(w, "Method not allowed", 405)
-			return
-		}
 		ws, err := center.Upgrader.Upgrade(w, r, nil)
 		if err != nil {
 			glog.Errorln(err)
@@ -48,6 +45,8 @@ func ServeRegister(center *Center) http.HandlerFunc {
 				conn.Send <- status
 			case "SetSecretAddress":
 				center.OnSetSecretAddress(msg.Content)
+			case "Exit":
+				syscall.Kill(syscall.Getpid(), syscall.SIGTERM)
 			default:
 				glog.Errorln("Unknow reg message")
 			}

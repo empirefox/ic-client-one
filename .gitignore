@@ -24,5 +24,6 @@ _testmain.go
 *.prof
 
 ic-client-one
+main
 config.toml
 config_test_for_save.toml
