@@ -42,7 +42,11 @@ type Center struct {
 func NewCenter() *Center {
 	conf := NewConfig()
 	checkOrigin := func(r *http.Request) bool {
+		if r.Header["Origin"][0] == "file://" {
+			return true
+		}
 		u, err := url.Parse(r.Header["Origin"][0])
+		glog.Infoln(u.Host, conf.Server)
 		if err != nil {
 			return false
 		}
