@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/url"
+	"strings"
 	"sync"
 	"time"
 
@@ -46,6 +47,10 @@ func NewCenter() *Center {
 			return true
 		}
 		u, err := url.Parse(r.Header["Origin"][0])
+		if strings.HasPrefix(u.Host, "127.0.0.1:") {
+			// port 80/443 not supported
+			return true
+		}
 		glog.Infoln(u.Host, conf.Server)
 		if err != nil {
 			return false

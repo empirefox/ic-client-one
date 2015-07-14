@@ -1,9 +1,9 @@
 package register
 
 import (
-	"net/http"
 	"syscall"
 
+	"github.com/gin-gonic/gin"
 	"github.com/golang/glog"
 
 	. "github.com/empirefox/ic-client-one/center"
@@ -14,9 +14,9 @@ type RegMessage struct {
 	Content string `json:"content,omitempty"`
 }
 
-func ServeRegister(center *Center) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		ws, err := center.Upgrader.Upgrade(w, r, nil)
+func ServeRegister(center *Center) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ws, err := center.Upgrader.Upgrade(c.Writer, c.Request, nil)
 		if err != nil {
 			glog.Errorln(err)
 			return

@@ -42,7 +42,6 @@ func onCtrlConnected(c *Connection) {
 		return
 	}
 	c.Center.ChangeStatus <- "ready"
-	defer func() { c.Center.ChangeStatus <- "not_ready" }()
 	// login
 	c.Send <- append([]byte("addr:"), addr...)
 	c.Center.OnGetIpcams()
@@ -64,8 +63,12 @@ func onCtrlConnected(c *Connection) {
 			c.Center.OnManageReconnectIpcam(&cmd)
 		case "CreateSignalingConnection":
 			go signaling.OnCreateSignalingConnection(c.Center, &cmd)
+		case "LoginAddrError":
+			c.Center.ChangeStatus <- "auth_failed"
+			return
 		default:
 			glog.Errorln("Unknow command json")
 		}
 	}
+	c.Center.ChangeStatus <- "not_ready"
 }
