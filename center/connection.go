@@ -45,7 +45,9 @@ func (ws Connection) WriteClose() (quitLoop bool) {
 			glog.Errorln(err)
 		}
 		ticker.Stop()
-		ws.Close()
+		if !quitLoop {
+			ws.Close()
+		}
 	}()
 	for {
 		select {
