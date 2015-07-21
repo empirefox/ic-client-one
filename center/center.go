@@ -40,8 +40,8 @@ type Center struct {
 	Conductor            rtc.Conductor
 }
 
-func NewCenter() *Center {
-	conf := NewConfig()
+func NewCenter(cfile string) *Center {
+	conf := NewConfigFile(cfile)
 	checkOrigin := func(r *http.Request) bool {
 		if r.Header["Origin"][0] == "file://" {
 			return true
@@ -235,6 +235,11 @@ func (center *Center) OnSetSecretAddress(addr string) {
 		return
 	}
 	center.CtrlConn.Close()
+}
+
+func (center *Center) OnRemoveRoom() {
+	center.CtrlConn.Send <- GenServerCommand("RemoveRoom", "")
+	center.Conf.SetAddr("")
 }
 
 // Content => id

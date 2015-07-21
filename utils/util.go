@@ -39,5 +39,9 @@ func GenCtrlResMessage(to uint, tp string, m interface{}) ([]byte, error) {
 }
 
 func GenInfoMessage(to uint, msg string) []byte {
-	return []byte(fmt.Sprintf(`one:ResponseToMany:%s:{"type":"Info","content","%s"}`, to, msg))
+	return []byte(fmt.Sprintf(`one:ResponseToMany:%s:{"type":"Info","content":"%s"}`, to, msg))
+}
+
+func GenServerCommand(name, content string) []byte {
+	return []byte(fmt.Sprintf(`one:ServerCommand:{"name":"%s","content":"%s"}`, name, content))
 }

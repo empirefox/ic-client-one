@@ -48,6 +48,8 @@ func ServeRegister(center *Center) gin.HandlerFunc {
 				conn.Send <- []byte(fmt.Sprintf(`{"type":"RegRoomUrl","content":"%s"}`, center.Conf.RegRoomUrl()))
 			case "SetSecretAddress":
 				center.OnSetSecretAddress(msg.Content)
+			case "RemoveRoom":
+				center.OnRemoveRoom()
 			case "Exit":
 				syscall.Kill(syscall.Getpid(), syscall.SIGTERM)
 			default:
