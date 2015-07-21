@@ -39,7 +39,7 @@ func OnCreateSignalingConnection(center *Center, cmd *Command) {
 		center.CtrlConn.Send <- GenInfoMessage(cmd.From, "Dial signaling failed")
 		return
 	}
-	defer ws.Close()
+	//	defer ws.Close()
 	conn := NewConn(center, ws)
 	go conn.WriteClose()
 	onSignalingConnected(conn, center.Conf.GetIpcamUrl(sub.Camera))

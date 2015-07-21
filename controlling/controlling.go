@@ -35,7 +35,7 @@ func ctrlConnectLoop(center *Center) (quitLoop bool) {
 }
 
 func onCtrlConnected(c *Connection) {
-	defer c.Close()
+	//	defer c.Close()
 	addr := c.Center.Conf.GetAddr()
 	if len(addr) == 0 {
 		c.Center.ChangeStatus <- "not_authed"
