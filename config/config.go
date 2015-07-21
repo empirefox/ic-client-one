@@ -145,3 +145,11 @@ func (c *Config) CtrlUrl() string {
 func (c *Config) SignalingUrl(reciever string) string {
 	return c.wsUrl("signaling/" + reciever)
 }
+
+func (c *Config) RegRoomUrl() string {
+	p := "http"
+	if c.Secure {
+		p = "https"
+	}
+	return fmt.Sprintf("%s://%s/%s", p, c.Server, "login.html?from=/regroom.html")
+}

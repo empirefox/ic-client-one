@@ -1,6 +1,7 @@
 package register
 
 import (
+	"fmt"
 	"syscall"
 
 	"github.com/gin-gonic/gin"
@@ -43,6 +44,8 @@ func ServeRegister(center *Center) gin.HandlerFunc {
 					status = []byte(`{"type":"Status","content":"error"}`)
 				}
 				conn.Send <- status
+			case "GetServer":
+				conn.Send <- []byte(fmt.Sprintf(`{"type":"Server","content":"%s"}`, center.Conf.RegRoomUrl()))
 			case "SetSecretAddress":
 				center.OnSetSecretAddress(msg.Content)
 			case "Exit":
