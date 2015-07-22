@@ -35,7 +35,7 @@ func ctrlConnectLoop(center *Center) (quitLoop bool) {
 }
 
 func onCtrlConnected(c *Connection) {
-	//	defer c.Close()
+	defer c.Close()
 	addr := c.Center.Conf.GetAddr()
 	if len(addr) == 0 {
 		c.Center.ChangeStatus <- "not_authed"
@@ -44,7 +44,6 @@ func onCtrlConnected(c *Connection) {
 	c.Center.ChangeStatus <- "authing"
 	// login
 	c.Send <- append([]byte("addr:"), addr...)
-	c.Center.OnGetIpcams()
 
 	for {
 		var cmd Command
@@ -65,12 +64,14 @@ func onCtrlConnected(c *Connection) {
 		case "CreateSignalingConnection":
 			go signaling.OnCreateSignalingConnection(c.Center, &cmd)
 		case "LoginAddrOk":
+			c.Center.OnGetIpcams()
 			c.Center.ChangeStatus <- "ready"
 		case "LoginAddrError":
+			glog.Infoln("auth_failed")
 			c.Center.ChangeStatus <- "auth_failed"
 			return
 		default:
-			glog.Errorln("Unknow command json")
+			glog.Errorln("Unknow command json", cmd)
 		}
 	}
 	c.Center.ChangeStatus <- "not_ready"

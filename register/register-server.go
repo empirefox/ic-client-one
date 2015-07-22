@@ -1,7 +1,7 @@
 package register
 
 import (
-	"fmt"
+	"encoding/json"
 	"syscall"
 
 	"github.com/gin-gonic/gin"
@@ -44,8 +44,17 @@ func ServeRegister(center *Center) gin.HandlerFunc {
 					status = []byte(`{"type":"Status","content":"error"}`)
 				}
 				conn.Send <- status
-			case "GetRegRoomUrl":
-				conn.Send <- []byte(fmt.Sprintf(`{"type":"RegRoomUrl","content":"%s"}`, center.Conf.RegRoomUrl()))
+			case "GetRoomInfo":
+				info, err := json.Marshal(gin.H{
+					"type": "RoomInfo",
+					"content": gin.H{
+						"pid": syscall.Getpid(),
+					},
+				})
+				if err != nil {
+					glog.Errorln(err)
+				}
+				conn.Send <- info
 			case "SetSecretAddress":
 				center.OnSetSecretAddress(msg.Content)
 			case "RemoveRoom":
@@ -56,7 +65,7 @@ func ServeRegister(center *Center) gin.HandlerFunc {
 			case "Exit":
 				syscall.Kill(syscall.Getpid(), syscall.SIGTERM)
 			default:
-				glog.Errorln("Unknow reg message")
+				glog.Errorln("Unknow reg message", msg)
 			}
 		}
 	}
