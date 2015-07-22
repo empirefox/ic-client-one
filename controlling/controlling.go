@@ -68,7 +68,6 @@ func onCtrlConnected(c *Connection) {
 			c.Center.ChangeStatus <- "ready"
 		case "LoginAddrError":
 			c.Center.ChangeStatus <- "auth_failed"
-			glog.Infoln("LoginAddrError")
 			return
 		default:
 			glog.Errorln("Unknow command json")

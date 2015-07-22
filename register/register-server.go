@@ -49,7 +49,10 @@ func ServeRegister(center *Center) gin.HandlerFunc {
 			case "SetSecretAddress":
 				center.OnSetSecretAddress(msg.Content)
 			case "RemoveRoom":
+				center.ChangeStatus <- "removing"
 				center.OnRemoveRoom()
+			case "Close":
+				return
 			case "Exit":
 				syscall.Kill(syscall.Getpid(), syscall.SIGTERM)
 			default:
