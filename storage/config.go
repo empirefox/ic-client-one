@@ -42,10 +42,6 @@ var (
 	K_PING_PERIOD = []byte("PingPeriod")
 )
 
-func getDefaultRecDir() string {
-	return path.Join(gohome.Home(), recDirName)
-}
-
 ///////////////////////////////////////////
 // Conf
 ///////////////////////////////////////////
@@ -62,8 +58,9 @@ func NewConf(cpath ...string) Conf {
 	return Conf{DbPath: p}
 }
 
+// used by lower ffmpeg
 func (c *Conf) GetRecPrefix(id string) string {
-	return path.Join(c.GetRecDir(), id)
+	return path.Join(c.GetRecDirPath(), id)
 }
 
 func (c *Conf) dbPath() string {
@@ -95,7 +92,7 @@ func (c *Conf) Open() (err error) {
 		return err
 	}
 
-	err = os.MkdirAll(c.GetRecDir(), FILE_MODE)
+	err = os.MkdirAll(c.GetRecDirPath(), FILE_MODE)
 	return err
 }
 
@@ -148,12 +145,17 @@ func (c *Conf) IsSecure() bool {
 	return s
 }
 
-func (c *Conf) GetRecDir() string {
-	r := string(c.Get(K_REC_DIR))
-	if r != "" {
-		return r
+// support env like ${var} or $var
+func (c *Conf) GetRecDirPath() string {
+	dir := string(c.Get(K_REC_DIR))
+	if dir == "" {
+		dir = recDirName
 	}
-	return getDefaultRecDir()
+	dir = os.ExpandEnv(dir)
+	if path.IsAbs(dir) {
+		return dir
+	}
+	return path.Join(gohome.Home(), dir)
 }
 
 func (c *Conf) GetIpcams() (is Ipcams) {
