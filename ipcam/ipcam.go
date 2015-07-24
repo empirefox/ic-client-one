@@ -51,6 +51,6 @@ func (i Ipcam) Map(tag ...string) map[string]interface{} {
 
 // only unmarshal
 type SetterIpcam struct {
-	Id    []byte `json:"id,omitempty"`
-	Ipcam Ipcam
+	Target []byte `json:"target,omitempty"`
+	Ipcam
 }

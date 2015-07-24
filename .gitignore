@@ -25,5 +25,3 @@ _testmain.go
 
 ic-client-one
 main
-config.toml
-config_test_for_save.toml

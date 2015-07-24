@@ -23,18 +23,20 @@ type Signal struct {
 
 // Camera => Id
 type SubSignalCommand struct {
-	Camera   []byte `json:"camera,omitempty"`
+	Camera   string `json:"camera,omitempty"`
 	Reciever string `json:"reciever,omitempty"`
 }
 
+// cmd from signaling-server many.go CreateSignalingConnectionCommand
 // Content => SubSignalCommand
 func OnCreateSignalingConnection(center *Center, cmd *Command) {
 	var sub SubSignalCommand
 	if err := json.Unmarshal([]byte(cmd.Content), &sub); err != nil {
+		glog.Errorln(*cmd)
 		center.CtrlConn.Send <- GenInfoMessage(cmd.From, "Cannot parse SubSignalCommand")
 		return
 	}
-	i, err := center.Conf.GetIpcam(sub.Camera)
+	i, err := center.Conf.GetIpcam([]byte(sub.Camera))
 	if err != nil {
 		center.CtrlConn.Send <- GenInfoMessage(cmd.From, "Camera not found")
 		return
@@ -48,6 +50,11 @@ func OnCreateSignalingConnection(center *Center, cmd *Command) {
 	//	defer ws.Close()
 	conn := NewConn(center, ws)
 	go conn.WriteClose()
+	defer func() {
+		if err := recover(); err != nil {
+			glog.Errorln(err)
+		}
+	}()
 	onSignalingConnected(conn, i)
 }
 

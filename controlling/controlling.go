@@ -49,6 +49,7 @@ func onCtrlConnected(c *Connection) {
 		var cmd Command
 		if err := c.ReadJSON(&cmd); err != nil {
 			glog.Errorln(err)
+			c.Center.ChangeStatus <- "not_ready"
 			return
 		}
 

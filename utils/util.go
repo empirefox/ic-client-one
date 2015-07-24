@@ -15,12 +15,12 @@ func GenCtrlResMessage(to uint, tp string, m interface{}) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	msg = append([]byte(fmt.Sprintf(`one:ResponseToMany:%s:{"type":"Response","content":`, to, tp)), msg...)
+	msg = append([]byte(fmt.Sprintf(`one:ResponseToMany:%d:{"type":"Response","content":`, to, tp)), msg...)
 	return append(msg, '}'), nil
 }
 
 func GenInfoMessage(to uint, msg string) []byte {
-	return []byte(fmt.Sprintf(`one:ResponseToMany:%s:{"type":"Info","content":"%s"}`, to, msg))
+	return []byte(fmt.Sprintf(`one:ResponseToMany:%d:{"type":"Info","content":"%s"}`, to, msg))
 }
 
 func GenServerCommand(name, content string) []byte {

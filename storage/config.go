@@ -139,11 +139,11 @@ func (c *Conf) GetServer() string {
 	return server
 }
 
-// default false
+// default true
 func (c *Conf) IsSecure() bool {
 	s, err := strconv.ParseBool(string(c.Get(K_SECURE)))
 	if err != nil {
-		return false
+		return secure
 	}
 	return s
 }

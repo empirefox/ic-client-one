@@ -271,7 +271,7 @@ func (center *Center) OnManageSetIpcam(cmd *Command) {
 		center.CtrlConn.Send <- GenInfoMessage(cmd.From, "Cannot parse ipcam")
 		return
 	}
-	if err := center.Conf.PutIpcam(&data.Ipcam, data.Id); err != nil {
+	if err := center.Conf.PutIpcam(&data.Ipcam, data.Target); err != nil {
 		center.CtrlConn.Send <- GenInfoMessage(cmd.From, "Cannot get ipcam")
 		return
 	}
