@@ -7,6 +7,7 @@ import (
 
 	"github.com/empirefox/ic-client-one-wrap"
 	. "github.com/empirefox/ic-client-one/center"
+	"github.com/empirefox/ic-client-one/ipcam"
 	. "github.com/empirefox/ic-client-one/utils"
 )
 
@@ -20,8 +21,9 @@ type Signal struct {
 	Sdp string `json:"sdp,omitempty"`
 }
 
+// Camera => Id
 type SubSignalCommand struct {
-	Camera   string `json:"camera,omitempty"`
+	Camera   []byte `json:"camera,omitempty"`
 	Reciever string `json:"reciever,omitempty"`
 }
 
@@ -32,7 +34,11 @@ func OnCreateSignalingConnection(center *Center, cmd *Command) {
 		center.CtrlConn.Send <- GenInfoMessage(cmd.From, "Cannot parse SubSignalCommand")
 		return
 	}
-	glog.Infoln("connect to", sub.Camera)
+	i, err := center.Conf.GetIpcam(sub.Camera)
+	if err != nil {
+		center.CtrlConn.Send <- GenInfoMessage(cmd.From, "Camera not found")
+		return
+	}
 	ws, _, err := center.Dialer.Dial(center.Conf.SignalingUrl(sub.Reciever), nil)
 	if err != nil {
 		glog.Errorln(err)
@@ -42,10 +48,10 @@ func OnCreateSignalingConnection(center *Center, cmd *Command) {
 	//	defer ws.Close()
 	conn := NewConn(center, ws)
 	go conn.WriteClose()
-	onSignalingConnected(conn, center.Conf.GetIpcamUrl(sub.Camera))
+	onSignalingConnected(conn, i)
 }
 
-func onSignalingConnected(conn *Connection, url string) {
+func onSignalingConnected(conn *Connection, i ipcam.Ipcam) {
 	var pc rtc.PeerConn
 	defer func() {
 		glog.Infoln("onSignalingConnected finished")
@@ -66,12 +72,10 @@ func onSignalingConnected(conn *Connection, url string) {
 		case "offer":
 			if pc == nil {
 				glog.Infoln("creating peer")
-				var ok = false
-				pc, ok = conn.Center.CreatePeer(url, conn)
-				if !ok {
-					pc = nil
+				if !i.Online {
 					return
 				}
+				pc = conn.Center.Conductor.CreatePeer(i.Url, conn.Send)
 				pc.CreateAnswer(signal.Sdp)
 			}
 		case "candidate":

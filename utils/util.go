@@ -3,26 +3,7 @@ package utils
 import (
 	"encoding/json"
 	"fmt"
-
-	. "github.com/empirefox/ic-client-one/config"
 )
-
-type ManageIpcam struct {
-	Id     string `json:"id,omitempty"`
-	Name   string `json:"name,omitempty"`
-	Url    string `json:"url,omitempty"`
-	Rec    bool   `json:"rec,omitempty"`
-	Off    bool   `json:"off,omitempty"`
-	Online bool   `json:"online,omitempty"`
-}
-
-func (ipcam *ManageIpcam) Get() Ipcam {
-	return Ipcam{ipcam.Id, ipcam.Name, ipcam.Url, ipcam.Rec, ipcam.Off, ipcam.Online}
-}
-
-func GetManaged(ipcam *Ipcam) *ManageIpcam {
-	return &ManageIpcam{ipcam.Id, ipcam.Name, ipcam.Url, ipcam.Rec, ipcam.Off, ipcam.Online}
-}
 
 // tp: response.type
 func GenCtrlResMessage(to uint, tp string, m interface{}) ([]byte, error) {

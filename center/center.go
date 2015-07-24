@@ -13,7 +13,8 @@ import (
 	"github.com/gorilla/websocket"
 
 	"github.com/empirefox/ic-client-one-wrap"
-	. "github.com/empirefox/ic-client-one/config"
+	"github.com/empirefox/ic-client-one/ipcam"
+	. "github.com/empirefox/ic-client-one/storage"
 	. "github.com/empirefox/ic-client-one/utils"
 )
 
@@ -34,14 +35,14 @@ type Center struct {
 	QuitWaitGroup        sync.WaitGroup
 	CtrlConn             *Connection
 	ctrlConnMutex        sync.Mutex
-	Conf                 Config
+	Conf                 Conf
 	Upgrader             Upgrader
 	Dialer               Dialer
 	Conductor            rtc.Conductor
 }
 
-func NewCenter(cfile string) *Center {
-	conf := NewConfigFile(cfile)
+func NewCenter(cpath ...string) *Center {
+	conf := NewConf(cpath...)
 	checkOrigin := func(r *http.Request) bool {
 		if r.Header["Origin"][0] == "file://" {
 			return true
@@ -51,11 +52,11 @@ func NewCenter(cfile string) *Center {
 			// port 80/443 not supported
 			return true
 		}
-		glog.Infoln(u.Host, conf.Server)
 		if err != nil {
+			glog.Infoln(u.Host, conf.GetServer())
 			return false
 		}
-		return u.Host == conf.Server
+		return u.Host == conf.GetServer()
 	}
 
 	return &Center{
@@ -64,7 +65,7 @@ func NewCenter(cfile string) *Center {
 		RemoveStatusReciever: make(chan *Connection, 1),
 		ChangeStatus:         make(chan string),
 		Quit:                 make(chan bool),
-		Conf:                 *conf,
+		Conf:                 conf,
 		Upgrader: &websocket.Upgrader{
 			ReadBufferSize:  4096,
 			WriteBufferSize: 4096,
@@ -79,7 +80,7 @@ func NewCenter(cfile string) *Center {
 
 func (center *Center) preRun() {
 	glog.Infoln("preRun")
-	center.onRegistryOfflines()
+	center.onRegistryOfflines(true)
 	center.Conductor.AddIceServer("stun:stun.l.google.com:19302", "", "")
 	center.Conductor.AddIceServer("stun:stun.anyfirewall.com:3478", "", "")
 	center.Conductor.AddIceServer("turn:turn.bistri.com:80", "homeo", "homeo")
@@ -93,7 +94,7 @@ func (center *Center) postRun() {
 
 func (center *Center) run() {
 	glog.Infoln("run")
-	ticker := time.NewTicker(center.Conf.PingPeriod)
+	ticker := time.NewTicker(center.Conf.GetPingPeriod())
 	defer func() {
 		ticker.Stop()
 	}()
@@ -118,7 +119,7 @@ func (center *Center) run() {
 				}
 			}
 		case <-ticker.C:
-			center.onRegistryOfflines()
+			center.onRegistryOfflines(false)
 		case <-center.Quit:
 			return
 		}
@@ -131,14 +132,30 @@ func (center *Center) removeStatusReciever(c *Connection) {
 	close(c.Send)
 }
 
-func (center *Center) onRegistryOfflines() {
+// return isOnline
+func (center *Center) registry(i ipcam.Ipcam, force bool) bool {
+	if i.Off {
+		return false
+	}
+	if i.Online && !force {
+		return true
+	}
+	return center.Conductor.Registry(i.Url, center.Conf.GetRecPrefix(i.Id), i.Rec)
+}
+
+func (center *Center) onRegistryOfflines(force bool) {
 	var changed = false
-	for i, _ := range center.Conf.Ipcams {
-		cam := &center.Conf.Ipcams[i]
-		isOnline := cam.Online || (!cam.Off &&
-			center.Conductor.Registry(cam.Url, cam.GetRecName(&center.Conf), cam.Rec))
-		changed = !cam.Online && isOnline
-		cam.Online = isOnline
+	for _, i := range center.Conf.GetIpcams() {
+		// registry must be called
+		isOnline := center.registry(i, force)
+		ichanged := !i.Online && isOnline
+		changed = changed || ichanged
+		i.Online = isOnline
+		if ichanged {
+			if err := center.Conf.PutIpcam(&i); err != nil {
+				glog.Errorln(err)
+			}
+		}
 	}
 	if changed {
 		center.OnGetIpcams()
@@ -146,25 +163,22 @@ func (center *Center) onRegistryOfflines() {
 	glog.Infoln("onRegistryOfflines ok")
 }
 
-func (center *Center) CreatePeer(url string, conn *Connection) (rtc.PeerConn, bool) {
-	for i, _ := range center.Conf.Ipcams {
-		cam := &center.Conf.Ipcams[i]
-		if cam.Online && cam.Url == url {
-			return center.Conductor.CreatePeer(url, conn.Send), true
-		}
-	}
-	return nil, false
-}
-
-func (center *Center) Start() {
+func (center *Center) Start() error {
 	center.QuitWaitGroup.Add(1)
+	if err := center.Conf.Open(); err != nil {
+		return err
+	}
 	go center.Run()
+	return nil
 }
 
 func (center *Center) Run() {
-	defer center.QuitWaitGroup.Done()
+	defer func() {
+		center.QuitWaitGroup.Done()
+		center.Conf.Close()
+		center.postRun()
+	}()
 	center.preRun()
-	defer center.postRun()
 	center.run()
 }
 
@@ -193,11 +207,7 @@ func (center *Center) RemoveCtrlConn() {
 }
 
 func (center *Center) OnGetIpcams() {
-	ipcams := make(map[string]Ipcam, len(center.Conf.Ipcams))
-	for _, ipcam := range center.Conf.Ipcams {
-		ipcams[ipcam.Id] = ipcam
-	}
-	info, err := json.Marshal(ipcams)
+	info, err := json.Marshal(center.Conf.GetIpcams())
 	if err != nil {
 		glog.Errorln(err)
 		return
@@ -215,23 +225,20 @@ func (center *Center) OnGetIpcams() {
 
 // Content => id
 func (center *Center) OnManageReconnectIpcam(cmd *Command) {
-	for i, _ := range center.Conf.Ipcams {
-		if cam := &center.Conf.Ipcams[i]; cam.Id == cmd.Content {
-			cam.Online = !cam.Off &&
-				center.Conductor.Registry(cam.Url, cam.GetRecName(&center.Conf), cam.Rec)
-			if cam.Online {
-				center.OnGetIpcams()
-				return
-			}
-			center.CtrlConn.Send <- GenInfoMessage(cmd.From, "Failed to reconnect ipcam")
-			return
-		}
+	cam, err := center.Conf.GetIpcam([]byte(cmd.Content))
+	if err != nil {
+		center.CtrlConn.Send <- GenInfoMessage(cmd.From, "Cannot find ipcam")
 	}
-	center.CtrlConn.Send <- GenInfoMessage(cmd.From, "Cannot find ipcam")
+	cam.Online = center.registry(cam, true)
+	if !cam.Online {
+		center.CtrlConn.Send <- GenInfoMessage(cmd.From, "Failed to reconnect ipcam")
+		return
+	}
+	center.OnGetIpcams()
 }
 
-func (center *Center) OnSetSecretAddress(addr string) {
-	if err := center.Conf.SetAddr(addr); err != nil {
+func (center *Center) OnSetSecretAddress(addr []byte) {
+	if err := center.Conf.Put(K_SEC_ADDR, addr); err != nil {
 		return
 	}
 	center.CtrlConn.Close()
@@ -239,17 +246,17 @@ func (center *Center) OnSetSecretAddress(addr string) {
 
 func (center *Center) OnRemoveRoom() {
 	center.CtrlConn.Send <- GenServerCommand("RemoveRoom", "")
-	center.Conf.SetAddr("")
+	center.Conf.Put(K_SEC_ADDR, nil)
 }
 
 // Content => id
 func (center *Center) OnManageGetIpcam(cmd *Command) {
-	ipcam, err := center.Conf.GetIpcam(cmd.Content)
+	ipcam, err := center.Conf.GetIpcam([]byte(cmd.Content))
 	if err != nil {
 		center.CtrlConn.Send <- GenInfoMessage(cmd.From, "Cannot get ipcam")
 		return
 	}
-	msg, err := GenCtrlResMessage(cmd.From, cmd.Name, GetManaged(ipcam))
+	msg, err := GenCtrlResMessage(cmd.From, cmd.Name, ipcam.Map())
 	if err != nil {
 		center.CtrlConn.Send <- GenInfoMessage(cmd.From, "Cannot get ipcam content")
 		return
@@ -257,14 +264,14 @@ func (center *Center) OnManageGetIpcam(cmd *Command) {
 	center.CtrlConn.Send <- msg
 }
 
-// Content => Ipcam
+// Content => SetterIpcam
 func (center *Center) OnManageSetIpcam(cmd *Command) {
-	var ipcam ManageIpcam
-	if err := json.Unmarshal([]byte(cmd.Content), &ipcam); err != nil {
+	var data ipcam.SetterIpcam
+	if err := json.Unmarshal([]byte(cmd.Content), &data); err != nil {
 		center.CtrlConn.Send <- GenInfoMessage(cmd.From, "Cannot parse ipcam")
 		return
 	}
-	if err := center.Conf.SaveIpcam(ipcam.Get()); err != nil {
+	if err := center.Conf.PutIpcam(&data.Ipcam, data.Id); err != nil {
 		center.CtrlConn.Send <- GenInfoMessage(cmd.From, "Cannot get ipcam")
 		return
 	}

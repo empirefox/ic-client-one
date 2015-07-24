@@ -38,7 +38,7 @@ func NewConn(center *Center, ws *websocket.Conn) *Connection {
 }
 
 func (ws Connection) WriteClose() (quitLoop bool) {
-	ticker := time.NewTicker(ws.Center.Conf.PingPeriod)
+	ticker := time.NewTicker(ws.Center.Conf.GetPingPeriod())
 	defer func() {
 		glog.Infoln("ws closing")
 		if err := recover(); err != nil {

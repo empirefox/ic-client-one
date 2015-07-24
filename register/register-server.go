@@ -56,7 +56,7 @@ func ServeRegister(center *Center) gin.HandlerFunc {
 				}
 				conn.Send <- info
 			case "SetSecretAddress":
-				center.OnSetSecretAddress(msg.Content)
+				center.OnSetSecretAddress([]byte(msg.Content))
 			case "RemoveRoom":
 				center.ChangeStatus <- "removing"
 				center.OnRemoveRoom()
