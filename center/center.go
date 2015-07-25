@@ -141,9 +141,10 @@ func (center *Center) registry(i ipcam.Ipcam, force bool) bool {
 func (center *Center) onRegistryOfflines(force bool) {
 	var changed = false
 	for _, i := range center.Conf.GetIpcams() {
+		glog.Infoln(i)
 		// registry must be called
 		isOnline := center.registry(i, force)
-		ichanged := !i.Online && isOnline
+		ichanged := i.Online != isOnline
 		changed = changed || ichanged
 		i.Online = isOnline
 		if ichanged {
@@ -151,6 +152,7 @@ func (center *Center) onRegistryOfflines(force bool) {
 				glog.Errorln(err)
 			}
 		}
+		glog.Infoln(i)
 	}
 	if changed {
 		center.OnGetIpcams()
