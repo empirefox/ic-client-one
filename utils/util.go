@@ -7,16 +7,16 @@ import (
 
 // tp: response.type
 func GenCtrlResMessage(to uint, tp string, m interface{}) ([]byte, error) {
-	// Parsed by OnResponse
-	msg, err := json.Marshal(map[string]interface{}{
-		"type":    tp,
-		"content": m,
-	})
+	msg, err := json.Marshal(m)
 	if err != nil {
 		return nil, err
 	}
-	msg = append([]byte(fmt.Sprintf(`one:ResponseToMany:%d:{"type":"Response","content":`, to, tp)), msg...)
-	return append(msg, '}'), nil
+	// Response will be unwrapped by server,
+	// Then send content to Many
+	msg = []byte(fmt.Sprintf(`one:ResponseToMany:%d:{"type":"Response","content":{
+		"type":"%s","content":%s
+	}}`, to, tp, msg))
+	return msg, nil
 }
 
 func GenInfoMessage(to uint, msg string) []byte {

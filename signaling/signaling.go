@@ -1,14 +1,13 @@
 package signaling
 
 import (
-	"encoding/json"
-
 	"github.com/golang/glog"
 
 	"github.com/empirefox/ic-client-one-wrap"
 	. "github.com/empirefox/ic-client-one/center"
 	"github.com/empirefox/ic-client-one/ipcam"
 	. "github.com/empirefox/ic-client-one/utils"
+	"github.com/empirefox/ic-client-one/wsio"
 )
 
 type Signal struct {
@@ -22,16 +21,11 @@ type Signal struct {
 }
 
 // Camera => Id
-type SubSignalCommand struct {
-	Camera   string `json:"camera,omitempty"`
-	Reciever string `json:"reciever,omitempty"`
-}
-
-// cmd from signaling-server many.go CreateSignalingConnectionCommand
 // Content => SubSignalCommand
-func OnCreateSignalingConnection(center *Center, cmd *Command) {
-	var sub SubSignalCommand
-	if err := json.Unmarshal([]byte(cmd.Content), &sub); err != nil {
+// cmd from signaling-server many.go CreateSignalingConnectionCommand
+func OnCreateSignalingConnection(center *Center, cmd *wsio.FromServerCommand) {
+	sub, err := cmd.Signaling()
+	if err != nil {
 		glog.Errorln(*cmd)
 		center.CtrlConn.Send <- GenInfoMessage(cmd.From, "Cannot parse SubSignalCommand")
 		return

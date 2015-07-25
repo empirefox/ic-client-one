@@ -7,6 +7,7 @@ import (
 
 	. "github.com/empirefox/ic-client-one/center"
 	"github.com/empirefox/ic-client-one/signaling"
+	"github.com/empirefox/ic-client-one/wsio"
 )
 
 func CtrlConnect(center *Center) {
@@ -46,7 +47,7 @@ func onCtrlConnected(c *Connection) {
 	c.Send <- append([]byte("addr:"), addr...)
 
 	for {
-		var cmd Command
+		var cmd wsio.FromServerCommand
 		if err := c.ReadJSON(&cmd); err != nil {
 			glog.Errorln(err)
 			c.Center.ChangeStatus <- "not_ready"

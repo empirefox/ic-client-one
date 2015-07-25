@@ -16,14 +16,8 @@ import (
 	"github.com/empirefox/ic-client-one/ipcam"
 	. "github.com/empirefox/ic-client-one/storage"
 	. "github.com/empirefox/ic-client-one/utils"
+	"github.com/empirefox/ic-client-one/wsio"
 )
-
-// From One: "ManageGetIpcam", "ManageSetIpcam", "ManageReconnectIpcam"
-type Command struct {
-	From    uint   `json:"from"`
-	Name    string `json:"name"`
-	Content string `json:"content"`
-}
 
 type Center struct {
 	status               string
@@ -59,7 +53,7 @@ func NewCenter(cpath ...string) *Center {
 		return u.Host == conf.GetServer()
 	}
 
-	return &Center{
+	center := &Center{
 		statusReciever:       make(map[*Connection]bool),
 		AddStatusReciever:    make(chan *Connection, 1),
 		RemoveStatusReciever: make(chan *Connection, 1),
@@ -74,8 +68,9 @@ func NewCenter(cpath ...string) *Center {
 		Dialer: &websocket.Dialer{
 			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 		},
-		Conductor: rtc.NewConductor(),
 	}
+	center.Conductor = rtc.NewConductor(center)
+	return center
 }
 
 func (center *Center) preRun() {
@@ -140,7 +135,7 @@ func (center *Center) registry(i ipcam.Ipcam, force bool) bool {
 	if i.Online && !force {
 		return true
 	}
-	return center.Conductor.Registry(i.Url, center.Conf.GetRecPrefix(i.Id), i.Rec)
+	return center.Conductor.Registry(i.Id, i.Url, center.Conf.GetRecPrefix(i.Id), i.Rec)
 }
 
 func (center *Center) onRegistryOfflines(force bool) {
@@ -224,8 +219,8 @@ func (center *Center) OnGetIpcams() {
 }
 
 // Content => id
-func (center *Center) OnManageReconnectIpcam(cmd *Command) {
-	cam, err := center.Conf.GetIpcam([]byte(cmd.Content))
+func (center *Center) OnManageReconnectIpcam(cmd *wsio.FromServerCommand) {
+	cam, err := center.Conf.GetIpcam(cmd.Value())
 	if err != nil {
 		center.CtrlConn.Send <- GenInfoMessage(cmd.From, "Cannot find ipcam")
 	}
@@ -250,8 +245,8 @@ func (center *Center) OnRemoveRoom() {
 }
 
 // Content => id
-func (center *Center) OnManageGetIpcam(cmd *Command) {
-	ipcam, err := center.Conf.GetIpcam([]byte(cmd.Content))
+func (center *Center) OnManageGetIpcam(cmd *wsio.FromServerCommand) {
+	ipcam, err := center.Conf.GetIpcam(cmd.Value())
 	if err != nil {
 		center.CtrlConn.Send <- GenInfoMessage(cmd.From, "Cannot get ipcam")
 		return
@@ -265,14 +260,39 @@ func (center *Center) OnManageGetIpcam(cmd *Command) {
 }
 
 // Content => SetterIpcam
-func (center *Center) OnManageSetIpcam(cmd *Command) {
+func (center *Center) OnManageSetIpcam(cmd *wsio.FromServerCommand) {
 	var data ipcam.SetterIpcam
-	if err := json.Unmarshal([]byte(cmd.Content), &data); err != nil {
+	if err := json.Unmarshal(cmd.Value(), &data); err != nil {
 		center.CtrlConn.Send <- GenInfoMessage(cmd.From, "Cannot parse ipcam")
 		return
 	}
-	if err := center.Conf.PutIpcam(&data.Ipcam, data.Target); err != nil {
+	if err := center.Conf.PutIpcam(&data.Ipcam, []byte(data.Target)); err != nil {
 		center.CtrlConn.Send <- GenInfoMessage(cmd.From, "Cannot get ipcam")
+		return
+	}
+	center.OnGetIpcams()
+}
+
+// implement rtc.StatusObserver
+func (center *Center) OnGangStatus(id string, status uint) {
+	i, err := center.Conf.GetIpcam([]byte(id))
+	if err != nil {
+		glog.Errorln("camera not found:", err)
+		return
+	}
+	var isOnline bool
+	switch status {
+	case rtc.ALIVE:
+		isOnline = true
+	case rtc.DEAD:
+		isOnline = false
+	}
+	if i.Online == isOnline {
+		return
+	}
+	i.Online = isOnline
+	if err := center.Conf.PutIpcam(&i); err != nil {
+		glog.Errorln(err)
 		return
 	}
 	center.OnGetIpcams()

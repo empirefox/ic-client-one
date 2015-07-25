@@ -37,9 +37,9 @@ func (fakePeer) AddCandidate(sdp, mid string, line int) {}
 
 type fakeConductor struct{}
 
-func (fakeConductor) Release()                                             {}
-func (fakeConductor) Registry(url, recName string, recEnabled bool) bool   { return true }
-func (fakeConductor) SetRecordEnabled(url string, recEnabled bool)         {}
-func (fakeConductor) CreatePeer(url string, send chan []byte) rtc.PeerConn { return &fakePeer{} }
-func (fakeConductor) DeletePeer(pc rtc.PeerConn)                           {}
-func (fakeConductor) AddIceServer(uri, name, psd string)                   {}
+func (fakeConductor) Release()                                               {}
+func (fakeConductor) Registry(id, url, recName string, recEnabled bool) bool { return true }
+func (fakeConductor) SetRecordEnabled(url string, recEnabled bool)           {}
+func (fakeConductor) CreatePeer(url string, send chan []byte) rtc.PeerConn   { return &fakePeer{} }
+func (fakeConductor) DeletePeer(pc rtc.PeerConn)                             {}
+func (fakeConductor) AddIceServer(uri, name, psd string)                     {}
