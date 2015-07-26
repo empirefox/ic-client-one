@@ -11,6 +11,11 @@ import (
 )
 
 func CtrlConnect(center *Center) {
+	defer func() {
+		if err := recover(); err != nil {
+			glog.Errorln(err)
+		}
+	}()
 	for !ctrlConnectLoop(center) {
 	}
 }
@@ -36,15 +41,22 @@ func ctrlConnectLoop(center *Center) (quitLoop bool) {
 }
 
 func onCtrlConnected(c *Connection) {
-	defer c.Close()
+	defer func() {
+		if err := recover(); err != nil {
+			glog.Errorln(err)
+		}
+	}()
+
 	addr := c.Center.Conf.GetAddr()
 	if len(addr) == 0 {
+		c.Close()
 		c.Center.ChangeStatus <- "not_authed"
 		return
 	}
-	c.Center.ChangeStatus <- "authing"
+	defer c.Close()
 	// login
-	c.Send <- append([]byte("addr:"), addr...)
+	c.Send <- append([]byte("one:Login:"), addr...)
+	c.Center.ChangeStatus <- "authing"
 
 	for {
 		var cmd wsio.FromServerCommand
@@ -69,7 +81,6 @@ func onCtrlConnected(c *Connection) {
 			c.Center.OnGetIpcams()
 			c.Center.ChangeStatus <- "ready"
 		case "LoginAddrError":
-			glog.Infoln("auth_failed")
 			c.Center.ChangeStatus <- "auth_failed"
 			return
 		default:

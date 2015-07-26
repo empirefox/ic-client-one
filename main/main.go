@@ -24,12 +24,11 @@ func main() {
 	cpath := flag.String("cpath", "", "config file path")
 	flag.Parse()
 	c := center.NewCenter(*cpath)
+	defer c.Close()
+
 	if err := c.Start(); err != nil {
+		glog.Errorln(err)
 	}
-	defer func() {
-		c.Close()
-		os.Exit(0)
-	}()
 
 	go controlling.CtrlConnect(c)
 

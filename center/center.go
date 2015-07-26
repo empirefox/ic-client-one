@@ -37,21 +37,6 @@ type Center struct {
 
 func NewCenter(cpath ...string) *Center {
 	conf := NewConf(cpath...)
-	checkOrigin := func(r *http.Request) bool {
-		if r.Header["Origin"][0] == "file://" {
-			return true
-		}
-		u, err := url.Parse(r.Header["Origin"][0])
-		if strings.HasPrefix(u.Host, "127.0.0.1:") {
-			// port 80/443 not supported
-			return true
-		}
-		if err != nil {
-			glog.Infoln(u.Host, conf.GetServer())
-			return false
-		}
-		return u.Host == conf.GetServer()
-	}
 
 	center := &Center{
 		statusReciever:       make(map[*Connection]bool),
@@ -60,16 +45,31 @@ func NewCenter(cpath ...string) *Center {
 		ChangeStatus:         make(chan string),
 		Quit:                 make(chan bool),
 		Conf:                 conf,
-		Upgrader: &websocket.Upgrader{
-			ReadBufferSize:  4096,
-			WriteBufferSize: 4096,
-			CheckOrigin:     checkOrigin,
-		},
 		Dialer: &websocket.Dialer{
 			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 		},
 	}
 	center.Conductor = rtc.NewConductor(center)
+	center.Upgrader = &websocket.Upgrader{
+		ReadBufferSize:  4096,
+		WriteBufferSize: 4096,
+		CheckOrigin: func(r *http.Request) bool {
+			if r.Header["Origin"][0] == "file://" {
+				return true
+			}
+			u, err := url.Parse(r.Header["Origin"][0])
+			if strings.HasPrefix(u.Host, "127.0.0.1:") {
+				// port 80/443 not supported
+				return true
+			}
+			glog.Infoln(u.Host, center.Conf.GetServer())
+			if err != nil {
+				return false
+			}
+			return u.Host == center.Conf.GetServer()
+		},
+	}
+
 	return center
 }
 
@@ -141,7 +141,6 @@ func (center *Center) registry(i ipcam.Ipcam, force bool) bool {
 func (center *Center) onRegistryOfflines(force bool) {
 	var changed = false
 	for _, i := range center.Conf.GetIpcams() {
-		glog.Infoln(i)
 		// registry must be called
 		isOnline := center.registry(i, force)
 		ichanged := i.Online != isOnline
@@ -152,12 +151,10 @@ func (center *Center) onRegistryOfflines(force bool) {
 				glog.Errorln(err)
 			}
 		}
-		glog.Infoln(i)
 	}
 	if changed {
 		center.OnGetIpcams()
 	}
-	glog.Infoln("onRegistryOfflines ok")
 }
 
 func (center *Center) Start() error {
@@ -170,8 +167,8 @@ func (center *Center) Start() error {
 }
 
 func (center *Center) Run() {
+	defer center.QuitWaitGroup.Done()
 	defer func() {
-		center.QuitWaitGroup.Done()
 		center.Conf.Close()
 		center.postRun()
 	}()
@@ -242,8 +239,8 @@ func (center *Center) OnSetSecretAddress(addr []byte) {
 }
 
 func (center *Center) OnRemoveRoom() {
-	center.CtrlConn.Send <- GenServerCommand("RemoveRoom", "")
 	center.Conf.Put(K_SEC_ADDR, nil)
+	center.CtrlConn.Send <- GenServerCommand("RemoveRoom", "")
 }
 
 // Content => id
