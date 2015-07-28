@@ -101,7 +101,7 @@ func (c *Conf) Open() (err error) {
 		return err
 	}
 
-	err = os.MkdirAll(c.GetRecDirPath(), FILE_MODE)
+	err = os.MkdirAll(c.GetRecDirPath(), os.ModePerm)
 	return err
 }
 
