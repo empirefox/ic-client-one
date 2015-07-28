@@ -272,6 +272,15 @@ func (center *Center) OnManageSetIpcam(cmd *wsio.FromServerCommand) {
 	center.OnGetIpcams()
 }
 
+// Content => Ipcam.Id
+func (center *Center) OnManageDelIpcam(cmd *wsio.FromServerCommand) {
+	if err := center.Conf.RemoveIpcam(cmd.Value()); err != nil {
+		center.CtrlConn.Send <- GenInfoMessage(cmd.From, "Cannot remove ipcam")
+		return
+	}
+	center.OnGetIpcams()
+}
+
 // implement rtc.StatusObserver
 func (center *Center) OnGangStatus(id string, status uint) {
 	i, err := center.Conf.GetIpcam([]byte(id))

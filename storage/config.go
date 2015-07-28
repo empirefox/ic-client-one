@@ -11,6 +11,7 @@ import (
 	"github.com/boltdb/bolt"
 	"github.com/empirefox/gohome"
 	. "github.com/empirefox/ic-client-one/ipcam"
+	"github.com/golang/glog"
 )
 
 const (
@@ -75,8 +76,16 @@ func (c *Conf) Open() (err error) {
 		return ErrHomeDirNotFound
 	}
 
-	c.db, err = bolt.Open(c.dbPath(), FILE_MODE, nil)
+	cpath := c.dbPath()
+	err = os.MkdirAll(path.Dir(cpath), os.ModePerm)
 	if err != nil {
+		glog.Errorln(err)
+		return err
+	}
+
+	c.db, err = bolt.Open(cpath, FILE_MODE, nil)
+	if err != nil {
+		glog.Errorln(err)
 		return err
 	}
 
@@ -191,7 +200,7 @@ func (c *Conf) GetIpcam(id []byte) (i Ipcam, err error) {
 func (c *Conf) PutIpcam(i *Ipcam, target ...[]byte) error {
 	err := c.db.Update(func(tx *bolt.Tx) error {
 		p := tx.Bucket(ipcamsBucketName)
-		if len(target) > 0 {
+		if len(target) > 0 && len(target[0]) > 0 {
 			if err := p.DeleteBucket(target[0]); err != nil {
 				return err
 			}

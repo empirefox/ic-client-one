@@ -24,6 +24,12 @@ type Signal struct {
 // Content => SubSignalCommand
 // cmd from signaling-server many.go CreateSignalingConnectionCommand
 func OnCreateSignalingConnection(center *Center, cmd *wsio.FromServerCommand) {
+	defer func() {
+		if err := recover(); err != nil {
+			glog.Errorln(err)
+		}
+	}()
+
 	sub, err := cmd.Signaling()
 	if err != nil {
 		glog.Errorln(*cmd)
@@ -44,11 +50,6 @@ func OnCreateSignalingConnection(center *Center, cmd *wsio.FromServerCommand) {
 	//	defer ws.Close()
 	conn := NewConn(center, ws)
 	go conn.WriteClose()
-	defer func() {
-		if err := recover(); err != nil {
-			glog.Errorln(err)
-		}
-	}()
 	onSignalingConnected(conn, i)
 }
 

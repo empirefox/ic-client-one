@@ -73,6 +73,8 @@ func onCtrlConnected(c *Connection) {
 			c.Center.OnManageGetIpcam(&cmd)
 		case "ManageSetIpcam":
 			c.Center.OnManageSetIpcam(&cmd)
+		case "ManageDelIpcam":
+			c.Center.OnManageDelIpcam(&cmd)
 		case "ManageReconnectIpcam":
 			c.Center.OnManageReconnectIpcam(&cmd)
 		case "CreateSignalingConnection":
