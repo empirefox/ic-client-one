@@ -9,38 +9,30 @@ import (
 	"time"
 
 	"github.com/empirefox/ic-client-one/center"
-	"github.com/empirefox/ic-client-one/controlling"
-	"github.com/empirefox/ic-client-one/register"
 	"github.com/facebookgo/httpdown"
 	"github.com/gin-gonic/gin"
 	"github.com/golang/glog"
 )
 
-func init() {
-	flag.Set("stderrthreshold", "INFO")
-}
-
 func main() {
 	cpath := flag.String("cpath", "", "config file path")
 	flag.Parse()
-	c := center.NewCenter(*cpath)
-	defer c.Close()
-
+	c := center.NewCentral(*cpath)
 	if err := c.Start(); err != nil {
 		glog.Errorln(err)
+		return
 	}
-
-	go controlling.CtrlConnect(c)
+	defer c.Close()
 
 	router := gin.Default()
-	router.GET("/register", register.ServeRegister(c))
+	router.GET("/local", c.ServeLocal)
 
 	go readLineToQuit()
 
 	server := &http.Server{Addr: ":12301", Handler: router}
 	hd := &httpdown.HTTP{
 		StopTimeout: 1 * time.Second,
-		KillTimeout: 1 * time.Second,
+		KillTimeout: 2 * time.Second,
 	}
 	if err := httpdown.ListenAndServe(server, hd); err != nil {
 		glog.Errorln("httpdown.ListenAndServe: ", err)

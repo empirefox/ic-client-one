@@ -22,6 +22,14 @@ var (
 
 type Ipcams map[string]Ipcam
 
+func (is Ipcams) Map(tag ...string) map[string]map[string]interface{} {
+	r := make(map[string]map[string]interface{}, len(is))
+	for k, v := range is {
+		r[k] = v.Map(tag...)
+	}
+	return r
+}
+
 // except json, other tags are used by structs when encoding(not decoding)
 type Ipcam struct {
 	Id     string `json:"id,omitempty"     structs:"id,omitempty"     view:"id,omitempty"`
@@ -39,7 +47,7 @@ func (i *Ipcam) FromBucket(id []byte, b *bolt.Bucket) {
 	i.Online, _ = strconv.ParseBool(string(b.Get(K_IC_ONLINE)))
 }
 
-func (i Ipcam) Map(tag ...string) map[string]interface{} {
+func (i *Ipcam) Map(tag ...string) map[string]interface{} {
 	ss := structs.New(i)
 	if len(tag) != 0 {
 		ss.TagName = tag[0]

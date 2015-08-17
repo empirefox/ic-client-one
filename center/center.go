@@ -1,11 +1,7 @@
 package center
 
 import (
-	"crypto/tls"
-	"encoding/json"
 	"net/http"
-	"net/url"
-	"strings"
 	"sync"
 	"time"
 
@@ -14,67 +10,85 @@ import (
 
 	"github.com/empirefox/ic-client-one-wrap"
 	"github.com/empirefox/ic-client-one/ipcam"
-	. "github.com/empirefox/ic-client-one/storage"
-	. "github.com/empirefox/ic-client-one/utils"
+	"github.com/empirefox/ic-client-one/storage"
 	"github.com/empirefox/ic-client-one/wsio"
 )
 
-type Center struct {
-	status               string
-	statusReciever       map[*Connection]bool
-	AddStatusReciever    chan *Connection
-	RemoveStatusReciever chan *Connection
-	ChangeStatus         chan string
-	Quit                 chan bool
-	QuitWaitGroup        sync.WaitGroup
-	CtrlConn             *Connection
-	ctrlConnMutex        sync.Mutex
-	Conf                 Conf
-	Upgrader             Upgrader
-	Dialer               Dialer
-	Conductor            rtc.Conductor
+type central struct {
+	websocket.Upgrader
+	websocket.Dialer
+
+	status            []byte
+	statusObservers   map[Ws]bool
+	addStatusObserver chan Ws
+	delStatusObserver chan Ws
+	changeStatus      chan []byte
+	changeNoStatus    chan []byte
+
+	quit          chan struct{}
+	quitWaitGroup sync.WaitGroup
+
+	connectCtrl   chan struct{}
+	ctrlConn      Ws
+	hasCtrl       bool
+	setCtrl       chan Ws
+	delCtrl       chan Ws
+	ctrlSender    chan []byte
+	serverCommand chan *wsio.FromServerCommand
+	localCommand  chan *FromLocalCommand
+
+	conf       storage.Conf
+	Conductor  rtc.Conductor
+	gangStatus chan gangStatus
 }
 
-func NewCenter(cpath ...string) *Center {
-	conf := NewConf(cpath...)
+func NewCentral(cpath ...string) Central {
+	conf := storage.NewConf(cpath...)
 
-	center := &Center{
-		statusReciever:       make(map[*Connection]bool),
-		AddStatusReciever:    make(chan *Connection, 1),
-		RemoveStatusReciever: make(chan *Connection, 1),
-		ChangeStatus:         make(chan string),
-		Quit:                 make(chan bool),
-		Conf:                 conf,
-		Dialer: &websocket.Dialer{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	center := &central{
+		Upgrader: websocket.Upgrader{
+			ReadBufferSize:  4096,
+			WriteBufferSize: 4096,
+			CheckOrigin: func(r *http.Request) bool {
+				origin := r.Header["Origin"]
+				if len(origin) == 0 {
+					return false
+				}
+				switch origin[0] {
+				case "http://ic.client", "file://":
+					return true
+				}
+				return false
+			},
 		},
+		Dialer: websocket.Dialer{},
+
+		status:            DISCONNECTED,
+		statusObservers:   make(map[Ws]bool),
+		addStatusObserver: make(chan Ws, 1),
+		delStatusObserver: make(chan Ws, 1),
+		changeStatus:      make(chan []byte, 64),
+		changeNoStatus:    make(chan []byte, 64),
+
+		connectCtrl:   make(chan struct{}, 1),
+		setCtrl:       make(chan Ws, 1),
+		delCtrl:       make(chan Ws, 1),
+		ctrlSender:    make(chan []byte, 64),
+		serverCommand: make(chan *wsio.FromServerCommand, 64),
+		localCommand:  make(chan *FromLocalCommand, 64),
+
+		quit:       make(chan struct{}),
+		conf:       conf,
+		gangStatus: make(chan gangStatus, 8),
 	}
 	center.Conductor = rtc.NewConductor(center)
-	center.Upgrader = &websocket.Upgrader{
-		ReadBufferSize:  4096,
-		WriteBufferSize: 4096,
-		CheckOrigin: func(r *http.Request) bool {
-			if r.Header["Origin"][0] == "file://" {
-				return true
-			}
-			u, err := url.Parse(r.Header["Origin"][0])
-			if strings.HasPrefix(u.Host, "127.0.0.1:") {
-				// port 80/443 not supported
-				return true
-			}
-			glog.Infoln(u.Host, center.Conf.GetServer())
-			if err != nil {
-				return false
-			}
-			return u.Host == center.Conf.GetServer()
-		},
-	}
 
 	return center
 }
 
-func (center *Center) preRun() {
+func (center *central) preRun() {
 	glog.Infoln("preRun")
+	center.onConnectCtrl()
 	center.onRegistryOfflines(true)
 	center.Conductor.AddIceServer("stun:stun.l.google.com:19302", "", "")
 	center.Conductor.AddIceServer("stun:stun.anyfirewall.com:3478", "", "")
@@ -82,208 +96,226 @@ func (center *Center) preRun() {
 	center.Conductor.AddIceServer("turn:turn.anyfirewall.com:443?transport=tcp", "webrtc", "webrtc")
 }
 
-func (center *Center) postRun() {
+func (center *central) postRun() {
 	glog.Infoln("postRun")
 	center.Conductor.Release()
 }
 
-func (center *Center) run() {
+func (center *central) run() {
 	glog.Infoln("run")
-	ticker := time.NewTicker(center.Conf.GetPingPeriod())
+	ticker := time.NewTicker(center.conf.GetPingPeriod())
 	defer func() {
 		ticker.Stop()
 	}()
 	for {
 		select {
-		case c := <-center.AddStatusReciever:
-			center.statusReciever[c] = true
-		case c := <-center.RemoveStatusReciever:
-			if _, ok := center.statusReciever[c]; ok {
-				center.removeStatusReciever(c)
+		case c := <-center.addStatusObserver:
+			center.onAddStatusObserver(c)
+
+		case c := <-center.delStatusObserver:
+			center.onDelStatusObserver(c)
+
+		case status := <-center.changeStatus:
+			center.onStatusChange(status)
+
+		case status := <-center.changeNoStatus:
+			center.onChangeNoStatus(status)
+
+		case _, ok := <-center.connectCtrl:
+			if ok {
+				center.onConnectCtrl()
 			}
-		case center.status = <-center.ChangeStatus:
-			status, err := center.GetStatus()
-			if err != nil {
-				continue
-			}
-			for c := range center.statusReciever {
-				select {
-				case c.Send <- status:
-				default:
-					center.removeStatusReciever(c)
-				}
-			}
+
+		case c := <-center.setCtrl:
+			center.onSetCtrl(c)
+
+		case c := <-center.delCtrl:
+			center.onDelCtrl(c)
+
+		case cmd := <-center.serverCommand:
+			center.onServerCommand(cmd)
+
+		case cmd := <-center.localCommand:
+			center.onLocalCommand(cmd)
+
+		case gs := <-center.gangStatus:
+			center.onGangStatus(gs.id, gs.status)
+
 		case <-ticker.C:
+			center.onConnectCtrl()
 			center.onRegistryOfflines(false)
-		case <-center.Quit:
+
+		case <-center.quit:
 			return
 		}
 	}
 }
 
-func (center *Center) removeStatusReciever(c *Connection) {
-	defer func() { recover() }()
-	delete(center.statusReciever, c)
-	close(c.Send)
+func (center *central) AddStatusObserver(c Ws) {
+	center.addStatusObserver <- c
+}
+func (center *central) onAddStatusObserver(c Ws) {
+	center.statusObservers[c] = true
+}
+
+func (center *central) DelStatusObserver(c Ws) {
+	center.delStatusObserver <- c
+}
+func (center *central) onDelStatusObserver(c Ws) {
+	delete(center.statusObservers, c)
+}
+
+func (center *central) ChangeStatus(status []byte) {
+	center.changeStatus <- status
+}
+func (center *central) onStatusChange(status []byte) {
+	if status != nil {
+		center.status = status
+	}
+	for c := range center.statusObservers {
+		c.Send(center.status)
+	}
+}
+
+func (center *central) ChangeNoStatus(status []byte) {
+	center.changeNoStatus <- status
+}
+func (center *central) onChangeNoStatus(status []byte) {
+	for c := range center.statusObservers {
+		c.Send(status)
+	}
+}
+
+func (center *central) Conf() *storage.Conf {
+	return &center.conf
+}
+
+func (center *central) Quiter() chan struct{} {
+	return center.quit
+}
+
+func (center *central) OnConnectCtrl() {
+	center.connectCtrl <- struct{}{}
+}
+func (center *central) onConnectCtrl() {
+	if center.hasCtrl {
+		center.onStatusChange(center.status)
+		return
+	}
+	center.onStatusChange(CONNECTING)
+	socket, _, err := center.Dial(center.conf.CtrlUrl(), nil)
+	if err != nil {
+		glog.Errorln(err)
+		center.onStatusChange(UNREACHABLE)
+		return
+	}
+
+	ws := NewConn(center, socket, center.quit)
+	center.onSetCtrl(ws)
+
+	go center.readCtrl(ws)
+	go ws.WriteClose()
+	center.onDoLogin()
+}
+
+func (center *central) SetCtrl(c Ws) {
+	center.setCtrl <- c
+}
+func (center *central) onSetCtrl(c Ws) {
+	center.hasCtrl = true
+	center.ctrlConn = c
+}
+
+func (center *central) DelCtrl(c Ws) {
+	center.delCtrl <- c
+}
+func (center *central) onDelCtrl(c Ws) {
+	if center.ctrlConn == c {
+		center.hasCtrl = false
+		center.ctrlConn = nil
+	}
+}
+
+func (center *central) SendCtrl(msg []byte) {
+	center.ctrlSender <- msg
+}
+func (center *central) sendCtrl(msg []byte) {
+	if center.hasCtrl {
+		center.ctrlConn.Send(msg)
+	}
+}
+
+func (center *central) closeCtrl() {
+	if center.hasCtrl {
+		center.ctrlConn.Close()
+	}
 }
 
 // return isOnline
-func (center *Center) registry(i ipcam.Ipcam, force bool) bool {
+func (center *central) registry(i ipcam.Ipcam, force bool) bool {
 	if i.Off {
 		return false
 	}
 	if i.Online && !force {
 		return true
 	}
-	return center.Conductor.Registry(i.Id, i.Url, center.Conf.GetRecPrefix(i.Id), i.Rec)
+	return center.Conductor.Registry(i.Id, i.Url, center.conf.GetRecPrefix(i.Id), i.Rec)
 }
 
-func (center *Center) onRegistryOfflines(force bool) {
+func (center *central) onRegistryOfflines(force bool) {
 	var changed = false
-	for _, i := range center.Conf.GetIpcams() {
+	for _, i := range center.conf.GetIpcams() {
 		// registry must be called
 		isOnline := center.registry(i, force)
 		ichanged := i.Online != isOnline
 		changed = changed || ichanged
 		i.Online = isOnline
 		if ichanged {
-			if err := center.Conf.PutIpcam(&i); err != nil {
+			if err := center.conf.PutIpcam(&i); err != nil {
 				glog.Errorln(err)
 			}
 		}
 	}
 	if changed {
-		center.OnGetIpcams()
+		center.onSendIpcams()
 	}
 }
 
-func (center *Center) Start() error {
-	center.QuitWaitGroup.Add(1)
-	if err := center.Conf.Open(); err != nil {
+func (center *central) Start() error {
+	if err := center.conf.Open(); err != nil {
 		return err
 	}
-	go center.Run()
+	center.quitWaitGroup.Add(1)
+	go center.start()
 	return nil
 }
 
-func (center *Center) Run() {
-	defer center.QuitWaitGroup.Done()
+func (center *central) start() {
+	defer center.quitWaitGroup.Done()
 	defer func() {
-		center.Conf.Close()
+		center.conf.Close()
 		center.postRun()
 	}()
 	center.preRun()
 	center.run()
 }
 
-func (center *Center) Close() {
-	close(center.Quit)
-	center.QuitWaitGroup.Wait()
-}
-
-func (center *Center) GetStatus() ([]byte, error) {
-	statusMap := map[string]string{"type": "Status", "content": center.status}
-	return json.Marshal(statusMap)
-}
-
-func (center *Center) AddCtrlConn(c *Connection) {
-	center.ctrlConnMutex.Lock()
-	defer center.ctrlConnMutex.Unlock()
-	center.CtrlConn = c
-	center.AddStatusReciever <- c
-}
-
-func (center *Center) RemoveCtrlConn() {
-	center.ctrlConnMutex.Lock()
-	defer center.ctrlConnMutex.Unlock()
-	center.RemoveStatusReciever <- center.CtrlConn
-	center.CtrlConn = nil
-}
-
-func (center *Center) OnGetIpcams() {
-	info, err := json.Marshal(center.Conf.GetIpcams())
-	if err != nil {
-		glog.Errorln(err)
-		return
-	}
-
-	center.ctrlConnMutex.Lock()
-	defer center.ctrlConnMutex.Unlock()
-	if center.CtrlConn == nil {
-		glog.Errorln("No control connection")
-		return
-	}
-	center.CtrlConn.Send <- append([]byte("one:Ipcams:"), info...)
-	glog.Infoln("OnGetIpcams ok")
-}
-
-// Content => id
-func (center *Center) OnManageReconnectIpcam(cmd *wsio.FromServerCommand) {
-	cam, err := center.Conf.GetIpcam(cmd.Value())
-	if err != nil {
-		center.CtrlConn.Send <- GenInfoMessage(cmd.From, "Cannot find ipcam")
-	}
-	cam.Online = center.registry(cam, true)
-	if !cam.Online {
-		center.CtrlConn.Send <- GenInfoMessage(cmd.From, "Failed to reconnect ipcam")
-		return
-	}
-	center.OnGetIpcams()
-}
-
-func (center *Center) OnSetSecretAddress(addr []byte) {
-	if err := center.Conf.Put(K_SEC_ADDR, addr); err != nil {
-		return
-	}
-	center.CtrlConn.Close()
-}
-
-func (center *Center) OnRemoveRoom() {
-	center.Conf.Put(K_SEC_ADDR, nil)
-	center.CtrlConn.Send <- GenServerCommand("RemoveRoom", "")
-}
-
-// Content => id
-func (center *Center) OnManageGetIpcam(cmd *wsio.FromServerCommand) {
-	ipcam, err := center.Conf.GetIpcam(cmd.Value())
-	if err != nil {
-		center.CtrlConn.Send <- GenInfoMessage(cmd.From, "Cannot get ipcam")
-		return
-	}
-	msg, err := GenCtrlResMessage(cmd.From, cmd.Name, ipcam.Map())
-	if err != nil {
-		center.CtrlConn.Send <- GenInfoMessage(cmd.From, "Cannot get ipcam content")
-		return
-	}
-	center.CtrlConn.Send <- msg
-}
-
-// Content => SetterIpcam
-func (center *Center) OnManageSetIpcam(cmd *wsio.FromServerCommand) {
-	var data ipcam.SetterIpcam
-	if err := json.Unmarshal(cmd.Value(), &data); err != nil {
-		center.CtrlConn.Send <- GenInfoMessage(cmd.From, "Cannot parse ipcam")
-		return
-	}
-	if err := center.Conf.PutIpcam(&data.Ipcam, []byte(data.Target)); err != nil {
-		center.CtrlConn.Send <- GenInfoMessage(cmd.From, "Cannot get ipcam")
-		return
-	}
-	center.OnGetIpcams()
-}
-
-// Content => Ipcam.Id
-func (center *Center) OnManageDelIpcam(cmd *wsio.FromServerCommand) {
-	if err := center.Conf.RemoveIpcam(cmd.Value()); err != nil {
-		center.CtrlConn.Send <- GenInfoMessage(cmd.From, "Cannot remove ipcam")
-		return
-	}
-	center.OnGetIpcams()
+func (center *central) Close() {
+	close(center.quit)
+	center.quitWaitGroup.Wait()
 }
 
 // implement rtc.StatusObserver
-func (center *Center) OnGangStatus(id string, status uint) {
-	i, err := center.Conf.GetIpcam([]byte(id))
+type gangStatus struct {
+	id     []byte
+	status uint
+}
+
+func (center *central) OnGangStatus(id string, status uint) {
+	center.gangStatus <- gangStatus{id: []byte(id), status: status}
+}
+func (center *central) onGangStatus(id []byte, status uint) {
+	i, err := center.conf.GetIpcam(id)
 	if err != nil {
 		glog.Errorln("camera not found:", err)
 		return
@@ -299,9 +331,9 @@ func (center *Center) OnGangStatus(id string, status uint) {
 		return
 	}
 	i.Online = isOnline
-	if err := center.Conf.PutIpcam(&i); err != nil {
+	if err := center.conf.PutIpcam(&i); err != nil {
 		glog.Errorln(err)
 		return
 	}
-	center.OnGetIpcams()
+	center.onSendIpcams()
 }

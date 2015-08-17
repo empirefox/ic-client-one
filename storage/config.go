@@ -30,14 +30,15 @@ var (
 	dbname     = "room.db"
 	recDirName = "ipcam-records"
 	pingPeriod = time.Second * 45
-	server     = "icv3.luck2.me:8443"
+	server     = "ic-api.herokuapp.com"
 	secure     = true
 
 	sysBucketName    = []byte("system")
 	ipcamsBucketName = []byte("ipcams")
 
 	K_REC_DIR     = []byte("RecDir")
-	K_SEC_ADDR    = []byte("SecretAddress")
+	K_REG_TOKEN   = []byte("RegToken")
+	K_ROOM_TOKEN  = []byte("RoomToken")
 	K_SECURE      = []byte("Secure")
 	K_SERVER      = []byte("Server")
 	K_PING_PERIOD = []byte("PingPeriod")
@@ -83,7 +84,10 @@ func (c *Conf) Open() (err error) {
 		return err
 	}
 
-	c.db, err = bolt.Open(cpath, FILE_MODE, nil)
+	c.db, err = bolt.Open(cpath, FILE_MODE, &bolt.Options{
+		Timeout:    10 * time.Second,
+		NoGrowSync: false,
+	})
 	if err != nil {
 		glog.Errorln(err)
 		return err
@@ -112,7 +116,12 @@ func (c *Conf) Close() {
 func (c *Conf) Get(k []byte) []byte {
 	var v []byte
 	c.db.View(func(tx *bolt.Tx) error {
-		v = tx.Bucket(sysBucketName).Get(k)
+		r := tx.Bucket(sysBucketName).Get(k)
+		n := len(r)
+		if n > 0 {
+			v = make([]byte, n)
+			copy(v, r)
+		}
 		return nil
 	})
 	return v
@@ -125,6 +134,13 @@ func (c *Conf) Put(k, v []byte) error {
 	return err
 }
 
+func (c *Conf) Del(k []byte) error {
+	err := c.db.Update(func(tx *bolt.Tx) error {
+		return tx.Bucket(sysBucketName).Delete(k)
+	})
+	return err
+}
+
 func (c *Conf) GetPingPeriod() time.Duration {
 	r, err := time.ParseDuration(string(c.Get(K_PING_PERIOD)))
 	if err != nil {
@@ -133,8 +149,12 @@ func (c *Conf) GetPingPeriod() time.Duration {
 	return r
 }
 
-func (c *Conf) GetAddr() []byte {
-	return c.Get(K_SEC_ADDR)
+func (c *Conf) GetRegToken() []byte {
+	return c.Get(K_REG_TOKEN)
+}
+
+func (c *Conf) GetRoomToken() []byte {
+	return c.Get(K_ROOM_TOKEN)
 }
 
 func (c *Conf) GetServer() string {
@@ -255,5 +275,5 @@ func (c *Conf) RegRoomUrl() string {
 	if c.IsSecure() {
 		p = "https"
 	}
-	return fmt.Sprintf("%s://%s/%s", p, c.GetServer(), "login.html?from=/regroom.html")
+	return fmt.Sprintf("%s://%s/%s", p, c.GetServer(), "one-rest/reg-room")
 }
