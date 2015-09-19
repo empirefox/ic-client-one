@@ -20,7 +20,9 @@ func (center *central) readCtrl(c Ws) {
 			center.ChangeStatus(BAD_SERVER_MSG)
 			return
 		}
+		glog.Infoln("Exec server cmd:", cmd.Name)
 		center.OnServerCommand(&cmd)
+		glog.Infoln("Finished server cmd:", cmd.Name)
 	}
 }
 

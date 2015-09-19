@@ -14,10 +14,11 @@ const (
 )
 
 var (
-	K_IC_URL    = []byte("Url")
-	K_IC_REC    = []byte("Rec")
-	K_IC_OFF    = []byte("Off")
-	K_IC_ONLINE = []byte("Online")
+	K_IC_URL       = []byte("Url")
+	K_IC_REC       = []byte("Rec")
+	K_IC_AUDIO_OFF = []byte("AudioOff")
+	K_IC_OFF       = []byte("Off")
+	K_IC_ONLINE    = []byte("Online")
 )
 
 type Ipcams map[string]Ipcam
@@ -32,17 +33,19 @@ func (is Ipcams) Map(tag ...string) map[string]map[string]interface{} {
 
 // except json, other tags are used by structs when encoding(not decoding)
 type Ipcam struct {
-	Id     string `json:"id,omitempty"     structs:"id,omitempty"     view:"id,omitempty"`
-	Url    string `json:"url"              structs:"url,omitempty"    view:"-"`
-	Rec    bool   `json:"rec,omitempty"    structs:"rec,omitempty"    view:"-"`
-	Off    bool   `json:"off,omitempty"    structs:"off,omitempty"    view:"off,omitempty"`
-	Online bool   `json:"online,omitempty" structs:"online,omitempty" view:"online,omitempty"`
+	Id       string `json:"id,omitempty"       structs:"id,omitempty"       view:"id,omitempty"`
+	Url      string `json:"url"                structs:"url,omitempty"      view:"-"`
+	Rec      bool   `json:"rec,omitempty"      structs:"rec,omitempty"      view:"-"`
+	AudioOff bool   `json:"audioOff,omitempty" structs:"audioOff,omitempty" view:"-"`
+	Off      bool   `json:"off,omitempty"      structs:"off,omitempty"      view:"off,omitempty"`
+	Online   bool   `json:"online,omitempty"   structs:"online,omitempty"   view:"online,omitempty"`
 }
 
 func (i *Ipcam) FromBucket(id []byte, b *bolt.Bucket) {
 	i.Id = string(id)
 	i.Url = string(b.Get(K_IC_URL))
 	i.Rec, _ = strconv.ParseBool(string(b.Get(K_IC_REC)))
+	i.AudioOff, _ = strconv.ParseBool(string(b.Get(K_IC_AUDIO_OFF)))
 	i.Off, _ = strconv.ParseBool(string(b.Get(K_IC_OFF)))
 	i.Online, _ = strconv.ParseBool(string(b.Get(K_IC_ONLINE)))
 }

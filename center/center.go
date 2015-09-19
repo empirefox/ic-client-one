@@ -90,10 +90,17 @@ func (center *central) preRun() {
 	glog.Infoln("preRun")
 	center.onConnectCtrl()
 	center.onRegistryOfflines(true)
-	center.Conductor.AddIceServer("stun:stun.l.google.com:19302", "", "")
+	center.Conductor.AddIceServer("stun:23.21.150.121", "", "")
+	center.Conductor.AddIceServer("stun:stun.fwdnet.net", "", "")
+	center.Conductor.AddIceServer("stun:stun.ideasip.com", "", "")
 	center.Conductor.AddIceServer("stun:stun.anyfirewall.com:3478", "", "")
-	center.Conductor.AddIceServer("turn:turn.bistri.com:80", "homeo", "homeo")
-	center.Conductor.AddIceServer("turn:turn.anyfirewall.com:443?transport=tcp", "webrtc", "webrtc")
+	center.Conductor.AddIceServer("stun:stun.voxgratia.org", "", "")
+	center.Conductor.AddIceServer("stun:stun.ekiga.net", "", "")
+	center.Conductor.AddIceServer("stun:stun.iptel.org", "", "")
+	center.Conductor.AddIceServer("stun:stun.voiparound.com", "", "")
+	center.Conductor.AddIceServer("stun:stun.voipbuster.com", "", "")
+	center.Conductor.AddIceServer("stun:stun.voipstunt.com", "", "")
+	center.Conductor.AddIceServer("stun:stun.voxgratia.org", "", "")
 }
 
 func (center *central) postRun() {
@@ -103,7 +110,7 @@ func (center *central) postRun() {
 
 func (center *central) run() {
 	glog.Infoln("run")
-	ticker := time.NewTicker(center.conf.GetPingPeriod())
+	ticker := time.NewTicker(center.conf.GetPingPeriod() / 4)
 	defer func() {
 		ticker.Stop()
 	}()
@@ -259,7 +266,7 @@ func (center *central) registry(i ipcam.Ipcam, force bool) bool {
 	if i.Online && !force {
 		return true
 	}
-	return center.Conductor.Registry(i.Id, i.Url, center.conf.GetRecPrefix(i.Id), i.Rec)
+	return center.Conductor.Registry(i.Id, i.Url, center.conf.GetRecPrefix(i.Id), i.Rec, i.AudioOff)
 }
 
 func (center *central) onRegistryOfflines(force bool) {
@@ -335,5 +342,7 @@ func (center *central) onGangStatus(id []byte, status uint) {
 		glog.Errorln(err)
 		return
 	}
-	center.onSendIpcams()
+	if center.hasCtrl {
+		center.onSendIpcams()
+	}
 }

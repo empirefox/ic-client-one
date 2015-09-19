@@ -32,7 +32,9 @@ func (center *central) ServeLocal(c *gin.Context) {
 			return
 		}
 		cmd.Ws = ws
+		glog.Infoln("Exec local cmd:", cmd.Type)
 		center.OnLocalCommand(cmd)
+		glog.Infoln("Finished local cmd:", cmd.Type)
 	}
 }
 
@@ -64,9 +66,7 @@ func (center *central) onLocalCommand(cmd *FromLocalCommand) {
 	case "SetRegToken":
 		center.onSetRegToken(cmd.Value())
 	case "DoRemoveRegToken":
-		center.conf.Del(storage.K_REG_TOKEN)
-		center.onChangeNoStatus(BAD_REG_TOKEN)
-		center.onStatusChange(nil)
+		center.onDoRemoveRegToken()
 	case "DoRegRoom":
 		center.onRegRoom([]byte(cmd.Content))
 	case "DoRemoveRoom":
@@ -136,6 +136,12 @@ func (center *central) onSetRegToken(token []byte) {
 	center.onChangeNoStatus(REGABLE)
 }
 
+func (center *central) onDoRemoveRegToken() {
+	center.conf.Del(storage.K_REG_TOKEN)
+	center.onChangeNoStatus(BAD_REG_TOKEN)
+	center.onStatusChange(nil)
+}
+
 func (center *central) onRegRoom(nameJson []byte) {
 	pre := center.status
 	if center.hasCtrl {
@@ -149,8 +155,6 @@ func (center *central) onRegRoom(nameJson []byte) {
 
 func (center *central) onRemoveRoom() {
 	if center.hasCtrl {
-		center.onStatusChange(UNREGGING_ROOM)
-		center.conf.Del(storage.K_ROOM_TOKEN)
 		center.sendCtrl(utils.GenServerCommand("RemoveRoom", ""))
 	} else {
 		center.onStatusChange(DISCONNECTED)
