@@ -97,6 +97,7 @@ func (center *central) preRun() {
 	center.Conductor.AddIceServer("stun:stun.voxgratia.org", "", "")
 	center.Conductor.AddIceServer("stun:stun.ekiga.net", "", "")
 	center.Conductor.AddIceServer("stun:stun.iptel.org", "", "")
+	center.Conductor.AddIceServer("stun:stun.schlund.de", "", "")
 	center.Conductor.AddIceServer("stun:stun.voiparound.com", "", "")
 	center.Conductor.AddIceServer("stun:stun.voipbuster.com", "", "")
 	center.Conductor.AddIceServer("stun:stun.voipstunt.com", "", "")
@@ -283,7 +284,7 @@ func (center *central) onRegistryOfflines(force bool) {
 			}
 		}
 	}
-	if changed {
+	if changed && center.hasCtrl {
 		center.onSendIpcams()
 	}
 }

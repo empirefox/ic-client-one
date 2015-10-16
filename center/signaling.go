@@ -9,17 +9,18 @@ import (
 )
 
 type Signal struct {
-	Type string `json:"type,omitempty"`
+	Camera string `json:"camera,omitempty"`
+	Type   string `json:"type,omitempty"`
 
 	Candidate string `json:"candidate,omitempty"`
-	Mid       string `json:"sdpMid,omitempty"`
-	Line      int    `json:"sdpMLineIndex,omitempty"`
+	Id        string `json:"id,omitempty"`
+	Label     int    `json:"label,omitempty"`
 
 	Sdp string `json:"sdp,omitempty"`
 }
 
-// Camera => Id
-// Content => SubSignalCommand
+// From => ClientId
+// Content => Camera
 // cmd from signaling-server many.go CreateSignalingConnectionCommand
 func (center *central) OnCreateSignalingConnection(cmd *wsio.FromServerCommand) {
 	defer func() {
@@ -28,18 +29,7 @@ func (center *central) OnCreateSignalingConnection(cmd *wsio.FromServerCommand) 
 		}
 	}()
 
-	sub, err := cmd.Signaling()
-	if err != nil {
-		glog.Errorln(*cmd)
-		center.SendCtrl(cmd.ToManyInfo("Cannot parse SubSignalCommand"))
-		return
-	}
-	i, err := center.conf.GetIpcam([]byte(sub.Camera))
-	if err != nil {
-		center.SendCtrl(cmd.ToManyInfo("Camera not found"))
-		return
-	}
-	socket, _, err := center.Dial(center.conf.SignalingUrl(sub.Reciever), nil)
+	socket, _, err := center.Dial(center.conf.SignalingUrl(string(cmd.Value())), nil)
 	if err != nil {
 		glog.Errorln(err)
 		center.SendCtrl(cmd.ToManyInfo("Dial signaling failed"))
@@ -48,41 +38,78 @@ func (center *central) OnCreateSignalingConnection(cmd *wsio.FromServerCommand) 
 	defer socket.Close()
 	ws := NewConn(center, socket, center.quit)
 	go ws.WriteClose()
-	center.onSignalingConnected(ws, i)
+	center.onSignalingConnected(ws)
 }
 
-func (center *central) onSignalingConnected(ws Ws, i ipcam.Ipcam) {
-	var pc rtc.PeerConn
+type Camera struct {
+	ipcam.Ipcam
+	center *central
+	ws     Ws
+	pc     rtc.PeerConn
+}
+
+func (c *Camera) onOffer(signal *Signal) {
+	glog.Infoln("creating peer")
+	if !c.Online {
+		return
+	}
+	c.pc = c.center.Conductor.CreatePeer(c.Url, c.ws.Send)
+	c.pc.CreateAnswer(signal.Sdp)
+}
+
+func (c *Camera) onCandidate(signal *Signal) {
+	glog.Infoln("add candidate")
+	c.pc.AddCandidate(signal.Candidate, signal.Id, signal.Label)
+}
+
+func (c *Camera) close() {
+	if !c.pc.IsZero() {
+		glog.Infoln("deleting peer")
+		c.center.Conductor.DeletePeer(c.pc)
+	}
+}
+
+func (center *central) onSignalingConnected(ws Ws) {
+	cs := make(map[string]*Camera)
 	defer func() {
 		glog.Infoln("onSignalingConnected finished")
-		if pc != nil {
-			glog.Infoln("deleting peer")
-			center.Conductor.DeletePeer(pc)
+		for _, c := range cs {
+			c.close()
 		}
 	}()
 
 	for {
-		var signal Signal
-		if err := ws.ReadJSON(&signal); err != nil {
+		signal := &Signal{}
+		if err := ws.ReadJSON(signal); err != nil {
 			glog.Errorln(err)
 			return
 		}
 
+		c, exist := cs[signal.Camera]
 		switch signal.Type {
 		case "offer":
-			if pc == nil {
-				glog.Infoln("creating peer")
-				if !i.Online {
-					return
-				}
-				pc = center.Conductor.CreatePeer(i.Url, ws.Send)
-				pc.CreateAnswer(signal.Sdp)
+			if exist {
+				return
 			}
+			i, err := center.conf.GetIpcam([]byte(signal.Camera))
+			if err != nil {
+				ws.Send([]byte(`{"error":"Camera not found"}`))
+				return
+			}
+			c = &Camera{Ipcam: i, center: center, ws: ws}
+			cs[signal.Camera] = c
+			c.onOffer(signal)
 		case "candidate":
-			if pc != nil {
-				glog.Infoln("add candidate")
-				pc.AddCandidate(signal.Candidate, signal.Mid, signal.Line)
+			if !exist {
+				return
 			}
+			c.onCandidate(signal)
+		case "bye":
+			if !exist {
+				return
+			}
+			c.close()
+			delete(cs, signal.Camera)
 		default:
 			glog.Errorln("Unknow signal json")
 		}
