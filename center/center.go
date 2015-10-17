@@ -267,7 +267,10 @@ func (center *central) registry(i ipcam.Ipcam, force bool) bool {
 	if i.Online && !force {
 		return true
 	}
-	return center.Conductor.Registry(i.Id, i.Url, center.conf.GetRecPrefix(i.Id), i.Rec, i.AudioOff)
+	w, h, ok := center.Conductor.Registry(i.Id, i.Url, center.conf.GetRecPrefix(i.Id), i.Rec, i.AudioOff)
+	i.Width = w
+	i.Height = h
+	return ok
 }
 
 func (center *central) onRegistryOfflines(force bool) {

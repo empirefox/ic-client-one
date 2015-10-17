@@ -1,6 +1,9 @@
 package center
 
 import (
+	"errors"
+	"fmt"
+
 	"github.com/golang/glog"
 
 	"github.com/empirefox/ic-client-one-wrap"
@@ -48,13 +51,16 @@ type Camera struct {
 	pc     rtc.PeerConn
 }
 
-func (c *Camera) onOffer(signal *Signal) {
+func (c *Camera) onOffer(signal *Signal) error {
 	glog.Infoln("creating peer")
 	if !c.Online {
-		return
+		return errors.New("Camera not online")
 	}
-	c.pc = c.center.Conductor.CreatePeer(c.Url, c.ws.Send)
+	if c.pc = c.center.Conductor.CreatePeer(c.Id, c.ws.Send); c.pc.IsZero() {
+		return errors.New("Create peer failed")
+	}
 	c.pc.CreateAnswer(signal.Sdp)
+	return nil
 }
 
 func (c *Camera) onCandidate(signal *Signal) {
@@ -97,8 +103,11 @@ func (center *central) onSignalingConnected(ws Ws) {
 				return
 			}
 			c = &Camera{Ipcam: i, center: center, ws: ws}
+			if err = c.onOffer(signal); err != nil {
+				ws.Send([]byte(fmt.Sprintf(`{"error":"%s"}`, err)))
+				return
+			}
 			cs[signal.Camera] = c
-			c.onOffer(signal)
 		case "candidate":
 			if !exist {
 				return

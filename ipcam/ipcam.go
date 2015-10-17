@@ -41,6 +41,8 @@ type Ipcam struct {
 	Off       bool   `json:",omitempty" structs:",omitempty" view:",omitempty"`
 	Online    bool   `json:",omitempty" structs:",omitempty" view:",omitempty"`
 	UpdatedAt int64  `json:",omitempty" structs:",omitempty" view:",omitempty"`
+	Width     int    `json:",omitempty" structs:",omitempty" view:",omitempty"`
+	Height    int    `json:",omitempty" structs:",omitempty" view:",omitempty"`
 }
 
 func (i *Ipcam) FromBucket(id []byte, b *bolt.Bucket) {
