@@ -247,7 +247,19 @@ func (c *Conf) PutIpcam(i *Ipcam, target ...[]byte) error {
 		if err = b.Put(K_IC_ONLINE, []byte(strconv.FormatBool(i.Online))); err != nil {
 			return err
 		}
-		err = b.Put(K_UPDATE_AT, []byte(strconv.FormatInt(time.Now().Unix(), 10)))
+		if err = b.Put(K_IC_HAS_VIDEO, []byte(strconv.FormatBool(i.HasVideo))); err != nil {
+			return err
+		}
+		if err = b.Put(K_IC_HAS_AUDIO, []byte(strconv.FormatBool(i.HasAudio))); err != nil {
+			return err
+		}
+		if err = b.Put(K_IC_WIDTH, []byte(strconv.Itoa(i.Width))); err != nil {
+			return err
+		}
+		if err = b.Put(K_IC_HEIGHT, []byte(strconv.Itoa(i.Height))); err != nil {
+			return err
+		}
+		err = b.Put(K_IC_UPDATE_AT, []byte(strconv.FormatInt(time.Now().Unix(), 10)))
 		return err
 	})
 	return err

@@ -259,33 +259,28 @@ func (center *central) closeCtrl() {
 	}
 }
 
-// return isOnline
-func (center *central) registry(i ipcam.Ipcam, force bool) bool {
-	if i.Off {
-		return false
+func (center *central) registry(i *ipcam.Ipcam, force bool) (changed bool) {
+	if i.Off || (i.Online && !force) {
+		return
 	}
-	if i.Online && !force {
-		return true
+	info, isOnline := center.Conductor.Registry(i.Id, i.Url, center.conf.GetRecPrefix(i.Id), i.Rec, i.AudioOff)
+
+	changed = i.Online != isOnline || i.Width != info.Width || i.Height != info.Height ||
+		i.HasVideo != info.Video || i.HasAudio != info.Audio
+	if changed {
+		i.Online, i.Width, i.Height, i.HasVideo, i.HasAudio = isOnline, info.Width, info.Height, info.Video, info.Audio
+		if err := center.conf.PutIpcam(i); err != nil {
+			glog.Errorln(err)
+		}
 	}
-	w, h, ok := center.Conductor.Registry(i.Id, i.Url, center.conf.GetRecPrefix(i.Id), i.Rec, i.AudioOff)
-	i.Width = w
-	i.Height = h
-	return ok
+	return
 }
 
 func (center *central) onRegistryOfflines(force bool) {
 	var changed = false
 	for _, i := range center.conf.GetIpcams() {
 		// registry must be called
-		isOnline := center.registry(i, force)
-		ichanged := i.Online != isOnline
-		changed = changed || ichanged
-		i.Online = isOnline
-		if ichanged {
-			if err := center.conf.PutIpcam(&i); err != nil {
-				glog.Errorln(err)
-			}
-		}
+		changed = center.registry(&i, force) || changed
 	}
 	if changed && center.hasCtrl {
 		center.onSendIpcams()

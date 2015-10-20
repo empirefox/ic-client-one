@@ -120,12 +120,14 @@ func (center *central) onReconnectIpcam(cmd *wsio.FromServerCommand) {
 	if err != nil {
 		center.ctrlConn.Send(cmd.ToManyInfo("Cannot find ipcam"))
 	}
-	cam.Online = center.registry(cam, true)
+	changed := center.registry(&cam, true)
 	if !cam.Online {
 		center.ctrlConn.Send(cmd.ToManyInfo("Failed to reconnect ipcam"))
 		return
 	}
-	center.onSendIpcams()
+	if changed {
+		center.onSendIpcams()
+	}
 }
 
 func (center *central) onSetRoomToken(cmd *wsio.FromServerCommand) {

@@ -19,7 +19,11 @@ var (
 	K_IC_AUDIO_OFF = []byte("AudioOff")
 	K_IC_OFF       = []byte("Off")
 	K_IC_ONLINE    = []byte("Online")
-	K_UPDATE_AT    = []byte("UpdatedAt")
+	K_IC_HAS_VIDEO = []byte("HasVideo")
+	K_IC_HAS_AUDIO = []byte("HasAudio")
+	K_IC_WIDTH     = []byte("Width")
+	K_IC_HEIGHT    = []byte("Height")
+	K_IC_UPDATE_AT = []byte("UpdatedAt")
 )
 
 type Ipcams map[string]Ipcam
@@ -40,9 +44,11 @@ type Ipcam struct {
 	AudioOff  bool   `json:",omitempty" structs:",omitempty" view:"-"`
 	Off       bool   `json:",omitempty" structs:",omitempty" view:",omitempty"`
 	Online    bool   `json:",omitempty" structs:",omitempty" view:",omitempty"`
-	UpdatedAt int64  `json:",omitempty" structs:",omitempty" view:",omitempty"`
+	HasVideo  bool   `json:",omitempty" structs:",omitempty" view:",omitempty"`
+	HasAudio  bool   `json:",omitempty" structs:",omitempty" view:",omitempty"`
 	Width     int    `json:",omitempty" structs:",omitempty" view:",omitempty"`
 	Height    int    `json:",omitempty" structs:",omitempty" view:",omitempty"`
+	UpdatedAt int64  `json:",omitempty" structs:",omitempty" view:",omitempty"`
 }
 
 func (i *Ipcam) FromBucket(id []byte, b *bolt.Bucket) {
@@ -52,7 +58,11 @@ func (i *Ipcam) FromBucket(id []byte, b *bolt.Bucket) {
 	i.AudioOff, _ = strconv.ParseBool(string(b.Get(K_IC_AUDIO_OFF)))
 	i.Off, _ = strconv.ParseBool(string(b.Get(K_IC_OFF)))
 	i.Online, _ = strconv.ParseBool(string(b.Get(K_IC_ONLINE)))
-	i.UpdatedAt, _ = strconv.ParseInt(string(b.Get(K_UPDATE_AT)), 10, 64)
+	i.HasVideo, _ = strconv.ParseBool(string(b.Get(K_IC_HAS_VIDEO)))
+	i.HasAudio, _ = strconv.ParseBool(string(b.Get(K_IC_HAS_AUDIO)))
+	i.Width, _ = strconv.Atoi(string(b.Get(K_IC_WIDTH)))
+	i.Height, _ = strconv.Atoi(string(b.Get(K_IC_HEIGHT)))
+	i.UpdatedAt, _ = strconv.ParseInt(string(b.Get(K_IC_UPDATE_AT)), 10, 64)
 }
 
 func (i *Ipcam) Map(tag ...string) map[string]interface{} {
