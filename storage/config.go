@@ -29,8 +29,8 @@ var (
 	appname    = "ic-room"
 	dbname     = "room.db"
 	recDirName = "ipcam-records"
-	pingPeriod = time.Second * 45
-	server     = "ic-api.herokuapp.com"
+	pingPeriod = time.Second * 100
+	server     = "gocamv1.mybluemix.net"
 	secure     = true
 
 	sysBucketName    = []byte("system")

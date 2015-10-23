@@ -109,7 +109,7 @@ func (center *central) onSetRecEnabled(enabled []byte) {
 		if i.Rec != rec {
 			i.Rec = rec
 			center.conf.PutIpcam(&i)
-			center.Conductor.SetRecordEnabled(i.Url, rec)
+			center.Conductor.SetRecordEnabled(i.Id, rec)
 		}
 	}
 	if rec {
