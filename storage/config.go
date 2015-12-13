@@ -30,7 +30,7 @@ var (
 	dbname     = "room.db"
 	recDirName = "ipcam-records"
 	pingPeriod = time.Second * 100
-	server     = "gocamv1.mybluemix.net"
+	server     = "gocamcom.daoapp.io"
 	secure     = true
 
 	sysBucketName    = []byte("system")
