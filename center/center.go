@@ -42,8 +42,11 @@ type central struct {
 	gangStatus chan gangStatus
 }
 
-func NewCentral(cpath ...string) Central {
-	conf := storage.NewConf(cpath...)
+func NewCentral(setup string) (Central, error) {
+	conf, err := storage.NewConf(setup)
+	if err != nil {
+		return nil, err
+	}
 
 	center := &central{
 		Upgrader: websocket.Upgrader{
@@ -78,12 +81,12 @@ func NewCentral(cpath ...string) Central {
 		localCommand:  make(chan *FromLocalCommand, 64),
 
 		quit:       make(chan struct{}),
-		conf:       conf,
+		conf:       *conf,
 		gangStatus: make(chan gangStatus, 8),
 	}
 	center.Conductor = rtc.NewConductor(center)
 
-	return center
+	return center, nil
 }
 
 func (center *central) preRun() {
@@ -111,7 +114,7 @@ func (center *central) postRun() {
 
 func (center *central) run() {
 	glog.Infoln("run")
-	ticker := time.NewTicker(center.conf.GetPingPeriod() / 4)
+	ticker := time.NewTicker(center.conf.GetPingSecond() / 4)
 	defer func() {
 		ticker.Stop()
 	}()

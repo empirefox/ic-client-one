@@ -1,0 +1,7 @@
+{
+  "DbPath": "./ic-room.db",
+  "RecDir": "$HOME/ipcam-records-dev",
+  "Server": "127.0.0.1:9998",
+  "TlsOn": false,
+  "PingSecond": 50
+}

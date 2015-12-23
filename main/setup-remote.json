@@ -1,0 +1,7 @@
+{
+  "DbPath": "./ic-room.db",
+  "RecDir": "$HOME/ipcam-records-devremote",
+  "Server": "gocamcom.daoapp.io",
+  "TlsOn": true,
+  "PingSecond": 50
+}

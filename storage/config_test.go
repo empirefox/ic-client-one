@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"fmt"
 	"io/ioutil"
 	"os"
 	"testing"
@@ -9,12 +10,27 @@ import (
 	"github.com/empirefox/ic-client-one/ipcam"
 )
 
+const jsonContent = `{
+		"DbPath":     "%s",
+		"RecDir":     "/tmp/ic-client-one-rec-dir",
+		"Server":     "http://127.0.0.1:9998",
+		"TlsOn":      false,
+		"PingSecond": 50
+	}`
+
 type TestConf struct {
-	Conf
+	*Conf
+}
+
+func newSetup() string {
+	return fmt.Sprintf(jsonContent, tempfile())
 }
 
 func NewTestConf() *TestConf {
-	c := NewConf(tempfile())
+	c, err := NewConf(newSetup())
+	if err != nil {
+		panic(err)
+	}
 	if err := c.Open(); err != nil {
 		panic(err)
 	}
@@ -35,7 +51,10 @@ func tempfile() string {
 }
 
 func TestConf_Open(t *testing.T) {
-	c := NewConf(tempfile())
+	c, err := NewConf(newSetup())
+	if err != nil {
+		panic(err)
+	}
 	if err := c.Open(); err != nil {
 		t.Errorf("NewConf failed, err: %v\n", err)
 	}

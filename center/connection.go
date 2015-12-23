@@ -29,7 +29,7 @@ func (conn connection) Send(msg []byte) {
 }
 
 func (conn connection) WriteClose() {
-	ticker := time.NewTicker(conn.central.Conf().GetPingPeriod())
+	ticker := time.NewTicker(conn.central.Conf().GetPingSecond())
 	defer func() {
 		glog.Infoln("conn closing")
 		if err := recover(); err != nil {

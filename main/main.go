@@ -15,12 +15,14 @@ import (
 )
 
 func main() {
-	cpath := flag.String("cpath", "", "config file path")
+	setup := flag.String("setup", "", "setup json file path/content")
 	flag.Parse()
-	c := center.NewCentral(*cpath)
+	c, err := center.NewCentral(*setup)
+	if err != nil {
+		glog.Fatal(err)
+	}
 	if err := c.Start(); err != nil {
-		glog.Errorln(err)
-		return
+		glog.Fatal(err)
 	}
 	defer c.Close()
 

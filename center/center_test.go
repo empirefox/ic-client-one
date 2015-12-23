@@ -2,6 +2,7 @@ package center
 
 import (
 	"flag"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"testing"
@@ -22,6 +23,18 @@ func tempfile() string {
 	return f.Name()
 }
 
+const jsonContent = `{
+		"DbPath":     "%s",
+		"RecDir":     "/tmp/ic-client-one-rec-dir",
+		"Server":     "http://127.0.0.1:9998",
+		"TlsOn":      false,
+		"PingSecond": 50
+	}`
+
+func newSetup() string {
+	return fmt.Sprintf(jsonContent, tempfile())
+}
+
 type FakeCenter struct {
 	*Center
 	file              string
@@ -29,8 +42,7 @@ type FakeCenter struct {
 }
 
 func newFakeCenter() *FakeCenter {
-	file := tempfile()
-	c := storage.NewConf(file)
+	c := storage.NewConf(newSetup())
 	if err := c.Open(); err != nil {
 		panic(err)
 	}

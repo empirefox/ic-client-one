@@ -1,21 +1,21 @@
 package storage
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"path"
 	"strconv"
 	"time"
 
 	"github.com/boltdb/bolt"
-	"github.com/empirefox/gohome"
 	. "github.com/empirefox/ic-client-one/ipcam"
 	"github.com/golang/glog"
 )
 
 const (
-	ID_LEN                = 16
 	FILE_MODE os.FileMode = 0644
 )
 
@@ -23,68 +23,78 @@ var (
 	ErrSystemBucketNotFound = errors.New("system bucket not found")
 	ErrSystemKeyNotFound    = errors.New("system key not found")
 	ErrIpcamNotFound        = errors.New("ipcam not found")
-	ErrHomeDirNotFound      = errors.New("home dir not found")
-
-	// defaults
-	appname    = "ic-room"
-	dbname     = "room.db"
-	recDirName = "ipcam-records"
-	pingPeriod = time.Second * 100
-	server     = "gocamcom.daoapp.io"
-	secure     = true
+	ErrDbPathRequired       = errors.New("DbPath must be set")
+	ErrRecDirRequired       = errors.New("RecDir must be set")
+	ErrServerRequired       = errors.New("Server must be set")
+	ErrPingSecond           = errors.New("PingSecond must greater than 30")
+	ErrSetupParam           = errors.New("setup is not a valid json file nor valid json content")
+	ErrEmptySetupParam      = errors.New("setup is empty")
 
 	sysBucketName    = []byte("system")
 	ipcamsBucketName = []byte("ipcams")
 
-	K_REC_DIR     = []byte("RecDir")
-	K_REG_TOKEN   = []byte("RegToken")
-	K_ROOM_TOKEN  = []byte("RoomToken")
-	K_SECURE      = []byte("Secure")
-	K_SERVER      = []byte("Server")
-	K_PING_PERIOD = []byte("PingPeriod")
+	K_REG_TOKEN  = []byte("RegToken")
+	K_ROOM_TOKEN = []byte("RoomToken")
 )
+
+type Setup struct {
+	DbPath     string
+	RecDir     string
+	Server     string
+	TlsOn      bool
+	PingSecond time.Duration
+}
+
+func (setup *Setup) Validate() error {
+	if setup.Server == "" {
+		return ErrServerRequired
+	}
+	if setup.PingSecond < 30 {
+		return ErrPingSecond
+	}
+	if setup.DbPath == "" {
+		return ErrDbPathRequired
+	}
+	if setup.RecDir == "" {
+		return ErrRecDirRequired
+	}
+	setup.DbPath = os.ExpandEnv(setup.DbPath)
+	setup.RecDir = os.ExpandEnv(setup.RecDir)
+	return nil
+}
 
 ///////////////////////////////////////////
 // Conf
 ///////////////////////////////////////////
 type Conf struct {
-	DbPath string
-	db     *bolt.DB
+	setup Setup
+	db    *bolt.DB
 }
 
-func NewConf(cpath ...string) Conf {
-	p := ""
-	if len(cpath) != 0 {
-		p = cpath[0]
+func NewConf(str string) (*Conf, error) {
+	content, err1 := ioutil.ReadFile(str)
+	if err1 != nil {
+		content = []byte(str)
 	}
-	return Conf{DbPath: p}
-}
-
-// used by lower ffmpeg
-func (c *Conf) GetRecPrefix(id string) string {
-	return path.Join(c.GetRecDirPath(), id)
-}
-
-func (c *Conf) dbPath() string {
-	if c.DbPath != "" {
-		return c.DbPath
+	if len(content) == 0 {
+		return nil, ErrEmptySetupParam
 	}
-	return path.Join(gohome.Config(appname), dbname)
+	var setup Setup
+	err2 := json.Unmarshal(content, &setup)
+	if err2 != nil {
+		if err1 != nil {
+			return nil, ErrSetupParam
+		}
+		return nil, err2
+	}
+	if err := setup.Validate(); err != nil {
+		return nil, err
+	}
+	return &Conf{setup: setup}, nil
 }
 
 func (c *Conf) Open() (err error) {
-	if gohome.Home() == "" {
-		return ErrHomeDirNotFound
-	}
-
-	cpath := c.dbPath()
-	err = os.MkdirAll(path.Dir(cpath), os.ModePerm)
-	if err != nil {
-		glog.Errorln(err)
-		return err
-	}
-
-	c.db, err = bolt.Open(cpath, FILE_MODE, &bolt.Options{
+	c.db, err = bolt.Open(c.setup.DbPath, FILE_MODE, &bolt.Options{
 		Timeout:    10 * time.Second,
 		NoGrowSync: false,
 	})
@@ -93,7 +103,7 @@ func (c *Conf) Open() (err error) {
 		return err
 	}
 
-	err = c.db.Update(func(tx *bolt.Tx) error {
+	return c.db.Update(func(tx *bolt.Tx) error {
 		_, err := tx.CreateBucketIfNotExists(ipcamsBucketName)
 		if err != nil {
 			return err
@@ -101,12 +111,6 @@ func (c *Conf) Open() (err error) {
 		_, err = tx.CreateBucketIfNotExists(sysBucketName)
 		return err
 	})
-	if err != nil {
-		return err
-	}
-
-	err = os.MkdirAll(c.GetRecDirPath(), os.ModePerm)
-	return err
 }
 
 func (c *Conf) Close() {
@@ -141,51 +145,11 @@ func (c *Conf) Del(k []byte) error {
 	return err
 }
 
-func (c *Conf) GetPingPeriod() time.Duration {
-	r, err := time.ParseDuration(string(c.Get(K_PING_PERIOD)))
-	if err != nil {
-		return pingPeriod
-	}
-	return r
-}
-
-func (c *Conf) GetRegToken() []byte {
-	return c.Get(K_REG_TOKEN)
-}
-
-func (c *Conf) GetRoomToken() []byte {
-	return c.Get(K_ROOM_TOKEN)
-}
-
-func (c *Conf) GetServer() string {
-	r := string(c.Get(K_SERVER))
-	if r != "" {
-		return r
-	}
-	return server
-}
-
-// default true
-func (c *Conf) IsSecure() bool {
-	s, err := strconv.ParseBool(string(c.Get(K_SECURE)))
-	if err != nil {
-		return secure
-	}
-	return s
-}
-
-// support env like ${var} or $var
-func (c *Conf) GetRecDirPath() string {
-	dir := string(c.Get(K_REC_DIR))
-	if dir == "" {
-		dir = recDirName
-	}
-	dir = os.ExpandEnv(dir)
-	if path.IsAbs(dir) {
-		return dir
-	}
-	return path.Join(gohome.Home(), dir)
-}
+// used by lower ffmpeg
+func (c *Conf) GetRecPrefix(id string) string { return path.Join(c.setup.RecDir, id) }
+func (c *Conf) GetPingSecond() time.Duration  { return c.setup.PingSecond * time.Second }
+func (c *Conf) GetRegToken() []byte           { return c.Get(K_REG_TOKEN) }
+func (c *Conf) GetRoomToken() []byte          { return c.Get(K_ROOM_TOKEN) }
 
 func (c *Conf) GetIpcams() (is Ipcams) {
 	is = make(Ipcams, 0)
@@ -274,10 +238,10 @@ func (c *Conf) RemoveIpcam(id []byte) error {
 
 func (c *Conf) wsUrl(context string) string {
 	p := "ws"
-	if c.IsSecure() {
+	if c.setup.TlsOn {
 		p = "wss"
 	}
-	return fmt.Sprintf("%s://%s/one/%s", p, c.GetServer(), context)
+	return fmt.Sprintf("%s://%s/one/%s", p, c.setup.Server, context)
 }
 
 func (c *Conf) CtrlUrl() string {
@@ -290,8 +254,8 @@ func (c *Conf) SignalingUrl(reciever string) string {
 
 func (c *Conf) RegRoomUrl() string {
 	p := "http"
-	if c.IsSecure() {
+	if c.setup.TlsOn {
 		p = "https"
 	}
-	return fmt.Sprintf("%s://%s/%s", p, c.GetServer(), "one-rest/reg-room")
+	return fmt.Sprintf("%s://%s/%s", p, c.setup.Server, "one-rest/reg-room")
 }

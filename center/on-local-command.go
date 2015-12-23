@@ -85,10 +85,9 @@ func (center *central) onGetRoomInfo(ws Ws) {
 	ws.Send([]byte(fmt.Sprintf(`{
 		"type":"RoomInfo",
 		"content":{
-			"pid":%d,
-			"recDir":"%s"
+			"pid":%d
 		}
-	}`, syscall.Getpid(), center.conf.GetRecDirPath())))
+	}`, syscall.Getpid())))
 }
 
 func (center *central) onGetRecEnabled() {
