@@ -25,7 +25,7 @@ var (
 	ErrIpcamNotFound        = errors.New("ipcam not found")
 	ErrDbPathRequired       = errors.New("DbPath must be set")
 	ErrRecDirRequired       = errors.New("RecDir must be set")
-	ErrServerRequired       = errors.New("Server must be set")
+	ErrWsUrlRequired        = errors.New("WsUrl must be set")
 	ErrPingSecond           = errors.New("PingSecond must greater than 30")
 	ErrSetupParam           = errors.New("setup is not a valid json file nor valid json content")
 	ErrEmptySetupParam      = errors.New("setup is empty")
@@ -40,14 +40,14 @@ var (
 type Setup struct {
 	DbPath     string
 	RecDir     string
-	Server     string
-	TlsOn      bool
+	WsUrl      string
 	PingSecond time.Duration
+	Stuns      []string
 }
 
 func (setup *Setup) Validate() error {
-	if setup.Server == "" {
-		return ErrServerRequired
+	if setup.WsUrl == "" {
+		return ErrWsUrlRequired
 	}
 	if setup.PingSecond < 30 {
 		return ErrPingSecond
@@ -146,6 +146,7 @@ func (c *Conf) Del(k []byte) error {
 }
 
 // used by lower ffmpeg
+func (c *Conf) GetStuns() []string            { return c.setup.Stuns }
 func (c *Conf) GetRecPrefix(id string) string { return path.Join(c.setup.RecDir, id) }
 func (c *Conf) GetPingSecond() time.Duration  { return c.setup.PingSecond * time.Second }
 func (c *Conf) GetRegToken() []byte           { return c.Get(K_REG_TOKEN) }
@@ -236,26 +237,7 @@ func (c *Conf) RemoveIpcam(id []byte) error {
 	return err
 }
 
-func (c *Conf) wsUrl(context string) string {
-	p := "ws"
-	if c.setup.TlsOn {
-		p = "wss"
-	}
-	return fmt.Sprintf("%s://%s/one/%s", p, c.setup.Server, context)
-}
+func (c *Conf) wsUrl(context string) string { return fmt.Sprintf("%s/one/%s", c.setup.WsUrl, context) }
 
-func (c *Conf) CtrlUrl() string {
-	return c.wsUrl("ctrl")
-}
-
-func (c *Conf) SignalingUrl(reciever string) string {
-	return c.wsUrl("signaling/" + reciever)
-}
-
-func (c *Conf) RegRoomUrl() string {
-	p := "http"
-	if c.setup.TlsOn {
-		p = "https"
-	}
-	return fmt.Sprintf("%s://%s/%s", p, c.setup.Server, "one-rest/reg-room")
-}
+func (c *Conf) CtrlUrl() string                     { return c.wsUrl("ctrl") }
+func (c *Conf) SignalingUrl(reciever string) string { return c.wsUrl("signaling/" + reciever) }

@@ -93,18 +93,9 @@ func (center *central) preRun() {
 	glog.Infoln("preRun")
 	center.onConnectCtrl()
 	center.onRegistryOfflines(true)
-	center.Conductor.AddIceServer("stun:23.21.150.121", "", "")
-	center.Conductor.AddIceServer("stun:stun.fwdnet.net", "", "")
-	center.Conductor.AddIceServer("stun:stun.ideasip.com", "", "")
-	center.Conductor.AddIceServer("stun:stun.anyfirewall.com:3478", "", "")
-	center.Conductor.AddIceServer("stun:stun.voxgratia.org", "", "")
-	center.Conductor.AddIceServer("stun:stun.ekiga.net", "", "")
-	center.Conductor.AddIceServer("stun:stun.iptel.org", "", "")
-	center.Conductor.AddIceServer("stun:stun.schlund.de", "", "")
-	center.Conductor.AddIceServer("stun:stun.voiparound.com", "", "")
-	center.Conductor.AddIceServer("stun:stun.voipbuster.com", "", "")
-	center.Conductor.AddIceServer("stun:stun.voipstunt.com", "", "")
-	center.Conductor.AddIceServer("stun:stun.voxgratia.org", "", "")
+	for _, stun := range center.conf.GetStuns() {
+		center.Conductor.AddIceServer(stun, "", "")
+	}
 }
 
 func (center *central) postRun() {

@@ -1,7 +1,19 @@
 {
   "DbPath": "./ic-room.db",
   "RecDir": "$HOME/ipcam-records-dev",
-  "Server": "127.0.0.1:9998",
-  "TlsOn": false,
-  "PingSecond": 50
+  "WsUrl": "ws://127.0.0.1:9998",
+  "PingSecond": 50,
+  "Stuns": [
+    "stun3.l.google.com:19302",
+    "stun.ideasip.com",
+    "stun4.l.google.com:19302",
+    "stun2.l.google.com:19302",
+    "stun1.l.google.com:19302",
+    "stun.ekiga.net",
+    "stun.schlund.de",
+    "stun.voipstunt.com",
+    "stun.voiparound.com",
+    "stun.voipbuster.com",
+    "stun.voxgratia.org"
+  ]
 }
