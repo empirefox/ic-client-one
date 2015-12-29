@@ -9,7 +9,7 @@ import (
 	"github.com/gorilla/websocket"
 
 	"github.com/empirefox/ic-client-one-wrap"
-	"github.com/empirefox/ic-client-one/ipcam"
+	"github.com/empirefox/ic-client-one/connector"
 	"github.com/empirefox/ic-client-one/storage"
 	"github.com/empirefox/ic-client-one/wsio"
 )
@@ -36,10 +36,13 @@ type central struct {
 	ctrlSender    chan []byte
 	serverCommand chan *wsio.FromServerCommand
 	localCommand  chan *FromLocalCommand
+	cntrEnt       chan *connector.Event
+	chIdEnt       chan *connector.ChIdEvent
 
-	conf       storage.Conf
-	Conductor  rtc.Conductor
-	gangStatus chan gangStatus
+	conf             *storage.Conf
+	Conductor        rtc.Conductor
+	ConnectorFactory *connector.ConnectorFactory
+	Connectors       *connector.Connectors
 }
 
 func NewCentral(setup string) (Central, error) {
@@ -79,12 +82,20 @@ func NewCentral(setup string) (Central, error) {
 		ctrlSender:    make(chan []byte, 64),
 		serverCommand: make(chan *wsio.FromServerCommand, 64),
 		localCommand:  make(chan *FromLocalCommand, 64),
+		cntrEnt:       make(chan *connector.Event, 1),
+		chIdEnt:       make(chan *connector.ChIdEvent, 1),
 
-		quit:       make(chan struct{}),
-		conf:       *conf,
-		gangStatus: make(chan gangStatus, 8),
+		quit: make(chan struct{}),
+		conf: conf,
 	}
 	center.Conductor = rtc.NewConductor(center)
+	center.ConnectorFactory = &connector.ConnectorFactory{
+		Conf:        center.conf,
+		Conductor:   center.Conductor,
+		ChanQuit:    center.quit,
+		OnEvent:     center.OnConnectorEvnet,
+		OnIdChanged: center.OnIcIdChanged,
+	}
 
 	return center, nil
 }
@@ -92,7 +103,8 @@ func NewCentral(setup string) (Central, error) {
 func (center *central) preRun() {
 	glog.Infoln("preRun")
 	center.onConnectCtrl()
-	center.onRegistryOfflines(true)
+	center.Connectors = center.ConnectorFactory.NewConnectors()
+	center.Connectors.Start()
 	for _, stun := range center.conf.GetStuns() {
 		center.Conductor.AddIceServer(stun, "", "")
 	}
@@ -134,18 +146,20 @@ func (center *central) run() {
 		case c := <-center.delCtrl:
 			center.onDelCtrl(c)
 
+		case e := <-center.cntrEnt:
+			center.onConnectorEvnet(e)
+
+		case e := <-center.chIdEnt:
+			center.onIcIdChanged(e)
+
 		case cmd := <-center.serverCommand:
 			center.onServerCommand(cmd)
 
 		case cmd := <-center.localCommand:
 			center.onLocalCommand(cmd)
 
-		case gs := <-center.gangStatus:
-			center.onGangStatus(gs.id, gs.status)
-
 		case <-ticker.C:
 			center.onConnectCtrl()
-			center.onRegistryOfflines(false)
 
 		case <-center.quit:
 			return
@@ -153,23 +167,13 @@ func (center *central) run() {
 	}
 }
 
-func (center *central) AddStatusObserver(c Ws) {
-	center.addStatusObserver <- c
-}
-func (center *central) onAddStatusObserver(c Ws) {
-	center.statusObservers[c] = true
-}
+func (center *central) AddStatusObserver(c Ws)   { center.addStatusObserver <- c }
+func (center *central) onAddStatusObserver(c Ws) { center.statusObservers[c] = true }
 
-func (center *central) DelStatusObserver(c Ws) {
-	center.delStatusObserver <- c
-}
-func (center *central) onDelStatusObserver(c Ws) {
-	delete(center.statusObservers, c)
-}
+func (center *central) DelStatusObserver(c Ws)   { center.delStatusObserver <- c }
+func (center *central) onDelStatusObserver(c Ws) { delete(center.statusObservers, c) }
 
-func (center *central) ChangeStatus(status []byte) {
-	center.changeStatus <- status
-}
+func (center *central) ChangeStatus(status []byte) { center.changeStatus <- status }
 func (center *central) onStatusChange(status []byte) {
 	if status != nil {
 		center.status = status
@@ -179,26 +183,17 @@ func (center *central) onStatusChange(status []byte) {
 	}
 }
 
-func (center *central) ChangeNoStatus(status []byte) {
-	center.changeNoStatus <- status
-}
+func (center *central) ChangeNoStatus(status []byte) { center.changeNoStatus <- status }
 func (center *central) onChangeNoStatus(status []byte) {
 	for c := range center.statusObservers {
 		c.Send(status)
 	}
 }
 
-func (center *central) Conf() *storage.Conf {
-	return &center.conf
-}
+func (center *central) Conf() *storage.Conf   { return center.conf }
+func (center *central) Quiter() chan struct{} { return center.quit }
 
-func (center *central) Quiter() chan struct{} {
-	return center.quit
-}
-
-func (center *central) OnConnectCtrl() {
-	center.connectCtrl <- struct{}{}
-}
+func (center *central) OnConnectCtrl() { center.connectCtrl <- struct{}{} }
 func (center *central) onConnectCtrl() {
 	if center.hasCtrl {
 		center.onStatusChange(center.status)
@@ -220,17 +215,13 @@ func (center *central) onConnectCtrl() {
 	center.onDoLogin()
 }
 
-func (center *central) SetCtrl(c Ws) {
-	center.setCtrl <- c
-}
+func (center *central) SetCtrl(c Ws) { center.setCtrl <- c }
 func (center *central) onSetCtrl(c Ws) {
 	center.hasCtrl = true
 	center.ctrlConn = c
 }
 
-func (center *central) DelCtrl(c Ws) {
-	center.delCtrl <- c
-}
+func (center *central) DelCtrl(c Ws) { center.delCtrl <- c }
 func (center *central) onDelCtrl(c Ws) {
 	if center.ctrlConn == c {
 		center.hasCtrl = false
@@ -238,9 +229,7 @@ func (center *central) onDelCtrl(c Ws) {
 	}
 }
 
-func (center *central) SendCtrl(msg []byte) {
-	center.ctrlSender <- msg
-}
+func (center *central) SendCtrl(msg []byte) { center.ctrlSender <- msg }
 func (center *central) sendCtrl(msg []byte) {
 	if center.hasCtrl {
 		center.ctrlConn.Send(msg)
@@ -253,32 +242,33 @@ func (center *central) closeCtrl() {
 	}
 }
 
-func (center *central) registry(i *ipcam.Ipcam, force bool) (changed bool) {
-	if i.Off || (i.Online && !force) {
-		return
-	}
-	info, isOnline := center.Conductor.Registry(i.Id, i.Url, center.conf.GetRecPrefix(i.Id), i.Rec, i.AudioOff)
+func (center *central) OnConnectorEvnet(e *connector.Event) { center.cntrEnt <- e }
+func (center *central) onConnectorEvnet(e *connector.Event) {
+	switch e.Type {
+	case connector.StatusChanged:
+		center.sendViewIpcam(e)
 
-	changed = i.Online != isOnline || i.Width != info.Width || i.Height != info.Height ||
-		i.HasVideo != info.Video || i.HasAudio != info.Audio
-	if changed {
-		i.Online, i.Width, i.Height, i.HasVideo, i.HasAudio = isOnline, info.Width, info.Height, info.Video, info.Audio
-		if err := center.conf.PutIpcam(i); err != nil {
-			glog.Errorln(err)
-		}
+	case connector.StatusNoChange:
+	case connector.SaveFailed:
+
+	case connector.GetOk:
+		center.sendMgrIpcam(e)
+
+	case connector.IcNotFound:
+		center.sendMgrIpcamNotFound(e)
+
+	case connector.DelOk:
+		center.broadcastDelIpcam(e)
+
+	case connector.DelFailed:
 	}
-	return
+	if e.Cmd != nil {
+		center.ctrlConn.Send(e.Cmd.ToManyInfo(e.Msg))
+	}
 }
 
-func (center *central) onRegistryOfflines(force bool) {
-	var changed = false
-	for _, i := range center.conf.GetIpcams() {
-		// registry must be called
-		changed = center.registry(&i, force) || changed
-	}
-	if changed && center.hasCtrl {
-		center.onSendIpcams()
-	}
+func (center *central) OnIcIdChanged(e *connector.ChIdEvent) { center.chIdEnt <- e }
+func (center *central) onIcIdChanged(e *connector.ChIdEvent) {
 }
 
 func (center *central) Start() error {
@@ -306,36 +296,6 @@ func (center *central) Close() {
 }
 
 // implement rtc.StatusObserver
-type gangStatus struct {
-	id     []byte
-	status uint
-}
-
 func (center *central) OnGangStatus(id string, status uint) {
-	center.gangStatus <- gangStatus{id: []byte(id), status: status}
-}
-func (center *central) onGangStatus(id []byte, status uint) {
-	i, err := center.conf.GetIpcam(id)
-	if err != nil {
-		glog.Errorln("camera not found:", err)
-		return
-	}
-	var isOnline bool
-	switch status {
-	case rtc.ALIVE:
-		isOnline = true
-	case rtc.DEAD:
-		isOnline = false
-	}
-	if i.Online == isOnline {
-		return
-	}
-	i.Online = isOnline
-	if err := center.conf.PutIpcam(&i); err != nil {
-		glog.Errorln(err)
-		return
-	}
-	if center.hasCtrl {
-		center.onSendIpcams()
-	}
+	center.Connectors.OnGangStatus(id, status)
 }

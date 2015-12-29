@@ -4,10 +4,20 @@ import (
 	"bytes"
 	"encoding/json"
 
+	"github.com/empirefox/ic-client-one/connector"
 	"github.com/empirefox/ic-client-one/ipcam"
 	"github.com/empirefox/ic-client-one/storage"
 	"github.com/empirefox/ic-client-one/wsio"
 	"github.com/golang/glog"
+)
+
+var (
+	kIcIds  = []byte("IcIds")
+	kIc     = []byte("Ic")
+	kIcIdCh = []byte("IcIdCh")
+	kXIc    = []byte("XIc")
+	kSecIc  = []byte("SecIc")
+	kNoIc   = []byte("NoIc")
 )
 
 func (center *central) readCtrl(c Ws) {
@@ -22,7 +32,7 @@ func (center *central) readCtrl(c Ws) {
 		}
 		glog.Infoln("Exec server cmd:", cmd.Name)
 		center.OnServerCommand(&cmd)
-		glog.Infoln("Finished server cmd:", cmd.Name)
+		glog.Infoln(cmd.Name, "============")
 	}
 }
 
@@ -37,29 +47,32 @@ func (center *central) onServerCommand(cmd *wsio.FromServerCommand) {
 		}
 	}()
 	switch cmd.Name {
-	case "GetIpcams":
-		center.onSendIpcams()
 	case "ManageGetIpcam":
 		center.onManageGetIpcam(cmd)
+
 	case "ManageSetIpcam":
 		center.onManageSetIpcam(cmd)
+
 	case "ManageDelIpcam":
 		center.onManageDelIpcam(cmd)
-	case "ManageReconnectIpcam":
-		center.onReconnectIpcam(cmd)
+
 	case "CreateSignalingConnection":
 		go center.OnCreateSignalingConnection(cmd)
-	case "LoginOk":
-		center.onStatusChange(READY)
-		center.onSendIpcams()
+
+	case "Broadcast", "UserOnline":
+		center.onViewRoom(cmd)
+
 	case "BadRoomToken":
-		center.conf.Del(storage.K_ROOM_TOKEN)
+		//		center.conf.Del(storage.K_ROOM_TOKEN)
 		center.onStatusChange(BAD_ROOM_TOKEN)
+
 	case "SetRoomToken":
 		center.onSetRoomToken(cmd)
+
 	case "BadRegToken":
 		center.conf.Del(storage.K_REG_TOKEN)
 		center.onChangeNoStatus(BAD_REG_TOKEN)
+
 	case "RegError":
 		center.onStatusChange(REG_ERROR)
 	default:
@@ -67,28 +80,13 @@ func (center *central) onServerCommand(cmd *wsio.FromServerCommand) {
 	}
 }
 
-func (center *central) onSendIpcams() {
-	info, err := json.Marshal(center.conf.GetIpcams().Map(ipcam.TAG_VIEW))
-	if err != nil {
-		glog.Errorln(err)
-		return
-	}
-	center.ctrlConn.Send(append([]byte("one:Ipcams:"), info...))
+func (center *central) onViewRoom(cmd *wsio.FromServerCommand) {
+	center.onStatusChange(READY)
+	center.ctrlConn.Send(cmd.ToManyObj(kIcIds, center.Connectors.Ids()))
+	center.Connectors.ViewRoom(cmd)
 }
-
-// Content => id
-func (center *central) onManageGetIpcam(cmd *wsio.FromServerCommand) {
-	i, err := center.conf.GetIpcam(cmd.Value())
-	if err != nil {
-		center.ctrlConn.Send(cmd.ToManyInfo("Cannot get ipcam"))
-		return
-	}
-	msg, err := cmd.ToManyObj(i.Map())
-	if err != nil {
-		center.ctrlConn.Send(cmd.ToManyInfo("Cannot get ipcam content"))
-		return
-	}
-	center.ctrlConn.Send(msg)
+func (center *central) sendViewIpcam(e *connector.Event) {
+	center.ctrlConn.Send(e.Cmd.ToManyObj(kIc, e.Ic.Map(ipcam.TAG_VIEW)))
 }
 
 // Content => SetterIpcam
@@ -98,36 +96,29 @@ func (center *central) onManageSetIpcam(cmd *wsio.FromServerCommand) {
 		center.ctrlConn.Send(cmd.ToManyInfo("Cannot parse ipcam"))
 		return
 	}
-	if err := center.conf.PutIpcam(&data.Ipcam, []byte(data.Target)); err != nil {
-		center.ctrlConn.Send(cmd.ToManyInfo("Cannot get ipcam"))
-		return
-	}
-	center.onSendIpcams()
+	center.Connectors.Save(cmd, data)
+}
+func (center *central) sendChIcId(e *connector.ChIdEvent) {
+	center.ctrlConn.Send(wsio.BcObj(kIcIdCh, e))
+}
+
+// Content => id
+func (center *central) onManageGetIpcam(cmd *wsio.FromServerCommand) {
+	center.Connectors.Get(cmd, string(cmd.Value()))
+}
+func (center *central) sendMgrIpcam(e *connector.Event) {
+	center.ctrlConn.Send(e.Cmd.ToManyObj(kSecIc, e.Ic.Map()))
+}
+func (center *central) sendMgrIpcamNotFound(e *connector.Event) {
+	center.ctrlConn.Send(e.Cmd.ToManyJSON(kNoIc, []byte(e.Ic.Id)))
 }
 
 // Content => Ipcam.Id
 func (center *central) onManageDelIpcam(cmd *wsio.FromServerCommand) {
-	if err := center.conf.RemoveIpcam(cmd.Value()); err != nil {
-		center.ctrlConn.Send(cmd.ToManyInfo("Cannot remove ipcam"))
-		return
-	}
-	center.onSendIpcams()
+	center.Connectors.Del(cmd, string(cmd.Value()))
 }
-
-// Content => id
-func (center *central) onReconnectIpcam(cmd *wsio.FromServerCommand) {
-	cam, err := center.conf.GetIpcam(cmd.Value())
-	if err != nil {
-		center.ctrlConn.Send(cmd.ToManyInfo("Cannot find ipcam"))
-	}
-	changed := center.registry(&cam, true)
-	if !cam.Online {
-		center.ctrlConn.Send(cmd.ToManyInfo("Failed to reconnect ipcam"))
-		return
-	}
-	if changed {
-		center.onSendIpcams()
-	}
+func (center *central) broadcastDelIpcam(e *connector.Event) {
+	center.ctrlConn.Send(wsio.BcJSON(kXIc, []byte(e.Ic.Id)))
 }
 
 func (center *central) onSetRoomToken(cmd *wsio.FromServerCommand) {

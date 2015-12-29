@@ -11,11 +11,23 @@ import (
 )
 
 const jsonContent = `{
-		"DbPath":     "%s",
-		"RecDir":     "/tmp/ic-client-one-rec-dir",
-		"Server":     "http://127.0.0.1:9998",
-		"TlsOn":      false,
-		"PingSecond": 50
+  "DbPath": "%s",
+  "RecDir": "/tmp/ic-client-one-rec-dir",
+  "WsUrl": "ws://127.0.0.1:9998",
+  "PingSecond": 50,
+  "Stuns": [
+    "stun3.l.google.com:19302",
+    "stun.ideasip.com",
+    "stun4.l.google.com:19302",
+    "stun2.l.google.com:19302",
+    "stun1.l.google.com:19302",
+    "stun.ekiga.net",
+    "stun.schlund.de",
+    "stun.voipstunt.com",
+    "stun.voiparound.com",
+    "stun.voipbuster.com",
+    "stun.voxgratia.org"
+  ]
 	}`
 
 type TestConf struct {

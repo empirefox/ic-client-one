@@ -209,9 +209,6 @@ func (c *Conf) PutIpcam(i *Ipcam, target ...[]byte) error {
 		if err = b.Put(K_IC_OFF, []byte(strconv.FormatBool(i.Off))); err != nil {
 			return err
 		}
-		if err = b.Put(K_IC_ONLINE, []byte(strconv.FormatBool(i.Online))); err != nil {
-			return err
-		}
 		if err = b.Put(K_IC_HAS_VIDEO, []byte(strconv.FormatBool(i.HasVideo))); err != nil {
 			return err
 		}
