@@ -227,6 +227,19 @@ func (c *Conf) PutIpcam(i *Ipcam, target ...[]byte) error {
 	return err
 }
 
+func (c *Conf) SetIpcamAttr(id, k, v []byte) error {
+	return c.db.Update(func(tx *bolt.Tx) error {
+		b := tx.Bucket(ipcamsBucketName).Bucket(id)
+		if b == nil {
+			return ErrIpcamNotFound
+		}
+		if err := b.Put(k, v); err != nil {
+			return err
+		}
+		return b.Put(K_IC_UPDATE_AT, []byte(strconv.FormatInt(time.Now().Unix(), 10)))
+	})
+}
+
 func (c *Conf) RemoveIpcam(id []byte) error {
 	err := c.db.Update(func(tx *bolt.Tx) error {
 		return tx.Bucket(ipcamsBucketName).DeleteBucket(id)

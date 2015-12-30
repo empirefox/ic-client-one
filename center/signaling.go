@@ -97,13 +97,15 @@ func (center *central) onSignalingConnected(ws Ws) {
 			if exist {
 				return
 			}
-			i, err := center.conf.GetIpcam([]byte(signal.Camera))
-			if err != nil {
+			ch := make(chan ipcam.Ipcam)
+			center.Connectors.CopyOf(signal.Camera, ch)
+			i, ok := <-ch
+			if !ok {
 				ws.Send([]byte(`{"error":"Camera not found"}`))
 				return
 			}
 			c = &Camera{Ipcam: i, center: center, ws: ws}
-			if err = c.onOffer(signal); err != nil {
+			if err := c.onOffer(signal); err != nil {
 				ws.Send([]byte(fmt.Sprintf(`{"error":"%s"}`, err)))
 				return
 			}

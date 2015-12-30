@@ -248,6 +248,9 @@ func (center *central) onConnectorEvnet(e *connector.Event) {
 	case connector.StatusChanged:
 		center.sendViewIpcam(e)
 
+	case connector.RecChanged:
+		center.sendLocalCamera(e)
+
 	case connector.StatusNoChange:
 	case connector.SaveFailed:
 
@@ -262,7 +265,7 @@ func (center *central) onConnectorEvnet(e *connector.Event) {
 
 	case connector.DelFailed:
 	}
-	if e.Cmd != nil {
+	if e.Cmd != nil && e.Msg != "" {
 		center.ctrlConn.Send(e.Cmd.ToManyInfo(e.Msg))
 	}
 }

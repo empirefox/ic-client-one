@@ -23,7 +23,4 @@ var (
 	BAD_REG_TOKEN        = []byte(`{"type":"Regable","content":"bad_reg_token"}`)
 	SAVE_REG_TOKEN_ERROR = []byte(`{"type":"Regable","content":"save_reg_token_error"}`)
 	REGABLE              = []byte(`{"type":"Regable","content":"regable"}`)
-
-	REC_ON  = []byte(`{"type":"RecEnabled","content":1}`)
-	REC_OFF = []byte(`{"type":"RecEnabled","content":0}`)
 )

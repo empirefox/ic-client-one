@@ -2,10 +2,11 @@ package center
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
-	"strconv"
 	"syscall"
 
+	"github.com/empirefox/ic-client-one/connector"
 	"github.com/empirefox/ic-client-one/storage"
 	"github.com/empirefox/ic-client-one/utils"
 	"github.com/gin-gonic/gin"
@@ -53,14 +54,17 @@ func (center *central) onLocalCommand(cmd *FromLocalCommand) {
 		cmd.Ws.Send(center.status)
 	case "GetRoomInfo":
 		center.onGetRoomInfo(cmd.Ws)
+		center.onGetLocalCameras()
+	case "GetCameras":
+		center.onGetLocalCameras()
 	case "DoConnect":
 		center.onConnectCtrl()
 	case "DoLogin":
 		center.onDoLogin()
-	case "GetRecEnabled":
-		center.onGetRecEnabled()
-	case "SetRecEnabled":
-		center.onSetRecEnabled([]byte(cmd.Content))
+	case "SetRecOn":
+		center.onSetRecEnabled(cmd.Value(), true)
+	case "SetRecOff":
+		center.onSetRecEnabled(cmd.Value(), false)
 	case "GetRegable":
 		center.onGetRegable()
 	case "SetRegToken":
@@ -90,32 +94,21 @@ func (center *central) onGetRoomInfo(ws Ws) {
 	}`, syscall.Getpid())))
 }
 
-func (center *central) onGetRecEnabled() {
-	for _, i := range center.conf.GetIpcams() {
-		if i.Rec {
-			center.onChangeNoStatus(REC_ON)
-		} else {
-			center.onChangeNoStatus(REC_OFF)
-		}
-		return
-	}
+func (center *central) onGetLocalCameras() {
+	center.Connectors.LocalBroadcast()
 }
 
 // TODO make it more reliable
-func (center *central) onSetRecEnabled(enabled []byte) {
-	rec, _ := strconv.ParseBool(string(enabled))
-	for _, i := range center.conf.GetIpcams() {
-		if i.Rec != rec {
-			i.Rec = rec
-			center.conf.PutIpcam(&i)
-			center.Conductor.SetRecordEnabled(i.Id, rec)
-		}
-	}
-	if rec {
-		center.onChangeNoStatus(REC_ON)
-	} else {
-		center.onChangeNoStatus(REC_OFF)
-	}
+func (center *central) onSetRecEnabled(id []byte, on bool) {
+	center.Connectors.SetRec(string(id), on)
+}
+func (center *central) sendLocalCamera(e *connector.Event) {
+	msg, _ := json.Marshal(map[string]interface{}{
+		"type":   "Rec",
+		"camera": e.Ic,
+		"ids":    center.Connectors.Ids(),
+	})
+	center.onChangeNoStatus(msg)
 }
 
 func (center *central) onGetRegable() {

@@ -32,6 +32,22 @@ func (cs *Connectors) ViewRoom(cmd *wsio.FromServerCommand) {
 	}
 }
 
+func (cs *Connectors) LocalBroadcast() {
+	cs.mu.Lock()
+	defer cs.mu.Unlock()
+	for _, c := range cs.s {
+		c.chanLbc <- struct{}{}
+	}
+}
+
+func (cs *Connectors) SetRec(id string, rec bool) {
+	cs.mu.Lock()
+	defer cs.mu.Unlock()
+	if c, ok := cs.s[id]; ok {
+		c.chanRec <- rec
+	}
+}
+
 func (cs *Connectors) Ids() (ids []string) {
 	cs.mu.Lock()
 	defer cs.mu.Unlock()
@@ -63,6 +79,16 @@ func (cs *Connectors) onSaved(id string, c *Connector) {
 	cs.s[c.i.Id] = c
 }
 
+func (cs *Connectors) CopyOf(id string, ch chan<- ipcam.Ipcam) {
+	cs.mu.Lock()
+	defer cs.mu.Unlock()
+	if c, ok := cs.s[id]; ok {
+		c.chanCopy <- ch
+	} else {
+		close(ch)
+	}
+}
+
 func (cs *Connectors) Get(cmd *wsio.FromServerCommand, id string) {
 	cs.mu.Lock()
 	defer cs.mu.Unlock()
@@ -88,6 +114,7 @@ func (cs *Connectors) Del(cmd *wsio.FromServerCommand, id string) {
 			Type: IcNotFound,
 			Cmd:  cmd,
 			Ic:   ipcam.Ipcam{Id: id},
+			Msg:  "Ipcam not found: " + c.i.Id,
 		})
 	}
 }
@@ -144,7 +171,10 @@ func (f *ConnectorFactory) NewConnector(cs *Connectors, i ipcam.Ipcam) *Connecto
 		chanQuit:   make(chan struct{}, 1),
 		chanReg:    make(chan *wsio.FromServerCommand, 1),
 		chanEndReg: make(chan regEndData, 1),
-		chanUnreg:  make(chan string, 1),
+		chanGs:     make(chan gangStatusData, 1),
+		chanCopy:   make(chan (chan<- ipcam.Ipcam), 1),
+		chanRec:    make(chan bool, 1),
+		chanLbc:    make(chan struct{}, 1),
 	}
 }
 

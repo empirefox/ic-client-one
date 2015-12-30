@@ -1,6 +1,7 @@
 package connector
 
 import (
+	"strconv"
 	"time"
 
 	"github.com/empirefox/ic-client-one-wrap"
@@ -32,6 +33,9 @@ type Connector struct {
 	chanEndReg chan regEndData
 	chanUnreg  chan string
 	chanGs     chan gangStatusData
+	chanCopy   chan (chan<- ipcam.Ipcam)
+	chanRec    chan bool
+	chanLbc    chan struct{}
 
 	OnEvent     func(e *Event)
 	OnIdChanged func(e *ChIdEvent)
@@ -50,6 +54,12 @@ func (c *Connector) Run() {
 
 		case data := <-c.ChanSave:
 			c.onSave(data)
+
+		case rec := <-c.chanRec:
+			c.onRec(rec)
+
+		case <-c.chanLbc:
+			c.onLocalBroadcast()
 
 		case cmd := <-c.ChanGet:
 			c.onGet(cmd)
@@ -70,6 +80,9 @@ func (c *Connector) Run() {
 		case data := <-c.chanGs:
 			c.onGangStatus(data)
 
+		case ch := <-c.chanCopy:
+			c.onCopyOf(ch)
+
 		case <-c.ChanQuit:
 			return
 		case <-c.chanQuit:
@@ -79,13 +92,35 @@ func (c *Connector) Run() {
 }
 
 func (c *Connector) onView(cmd *wsio.FromServerCommand) {
-	if !c.i.Off && !c.i.Online {
+	if !c.i.Off && c.i.Online {
 		c.OnEvent(&Event{
 			Type: StatusChanged,
 			Cmd:  cmd,
 			Ic:   c.i,
 		})
 	}
+}
+
+func (c *Connector) onLocalBroadcast() {
+	c.OnEvent(&Event{
+		Type: RecChanged,
+		Ic:   c.i,
+	})
+}
+
+func (c *Connector) onRec(rec bool) {
+	err := c.Conf.SetIpcamAttr([]byte(c.i.Id), ipcam.K_IC_REC, []byte(strconv.FormatBool(rec)))
+	if err != nil {
+		// TODO report error?
+		glog.Errorln(err)
+		return
+	}
+	c.i.Rec = rec
+	c.Conductor.SetRecordEnabled(c.i.Id, rec)
+	c.OnEvent(&Event{
+		Type: RecChanged,
+		Ic:   c.i,
+	})
 }
 
 func (c *Connector) goReging(cmd *wsio.FromServerCommand) {
@@ -155,6 +190,7 @@ func (c *Connector) onRegEnd(data regEndData) {
 func (c *Connector) onSave(data *SaveData) {
 	sameDevice := c.i.Id == data.Setter.Ipcam.Id && c.i.Url == data.Setter.Ipcam.Url &&
 		c.i.AudioOff == data.Setter.Ipcam.AudioOff && c.i.Off == data.Setter.Ipcam.Off
+
 	if sameDevice {
 		c.OnEvent(&Event{
 			Type: StatusNoChange,
@@ -250,3 +286,5 @@ func (c *Connector) onGangStatus(data gangStatusData) {
 		Ic:   c.i,
 	})
 }
+
+func (c *Connector) onCopyOf(ch chan<- ipcam.Ipcam) { ch <- c.i }

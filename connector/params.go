@@ -14,6 +14,7 @@ const (
 	IcNotFound
 	DelOk
 	DelFailed
+	RecChanged
 )
 
 type Event struct {
