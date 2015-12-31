@@ -257,7 +257,7 @@ func (c *Connector) onDel(cmd *wsio.FromServerCommand) {
 
 func (c *Connector) unregistry(id string) {
 	if id != "" {
-		c.unregistry(id)
+		c.Conductor.UnRegistry(id)
 	}
 }
 

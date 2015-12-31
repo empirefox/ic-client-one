@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"strconv"
 
 	"github.com/golang/glog"
 )
@@ -45,7 +46,7 @@ func (c *FromServerCommand) ToManyJSON(k []byte, j []byte) []byte {
 var infoKey = []byte("Info")
 
 func (c *FromServerCommand) ToManyInfo(msg string) []byte {
-	return c.ToManyJSON(infoKey, []byte(msg))
+	return c.ToManyJSON(infoKey, []byte(strconv.Quote(msg)))
 }
 
 var BcCmd = new(FromServerCommand)
