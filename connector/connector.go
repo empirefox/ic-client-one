@@ -42,7 +42,7 @@ type Connector struct {
 }
 
 func (c *Connector) Run() {
-	ticker := time.NewTicker(time.Second * 10)
+	ticker := time.NewTicker(time.Second * 20)
 	defer func() {
 		ticker.Stop()
 	}()
@@ -109,14 +109,16 @@ func (c *Connector) onLocalBroadcast() {
 }
 
 func (c *Connector) onRec(rec bool) {
-	err := c.Conf.SetIpcamAttr([]byte(c.i.Id), ipcam.K_IC_REC, []byte(strconv.FormatBool(rec)))
-	if err != nil {
-		// TODO report error?
-		glog.Errorln(err)
-		return
+	if c.i.Rec != rec {
+		err := c.Conf.SetIpcamAttr([]byte(c.i.Id), ipcam.K_IC_REC, []byte(strconv.FormatBool(rec)))
+		if err != nil {
+			// TODO report error?
+			glog.Errorln(err)
+			return
+		}
+		c.i.Rec = rec
+		c.Conductor.SetRecordEnabled(c.i.Id, rec)
 	}
-	c.i.Rec = rec
-	c.Conductor.SetRecordEnabled(c.i.Id, rec)
 	c.OnEvent(&Event{
 		Type: RecChanged,
 		Ic:   c.i,

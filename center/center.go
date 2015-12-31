@@ -244,29 +244,36 @@ func (center *central) closeCtrl() {
 
 func (center *central) OnConnectorEvnet(e *connector.Event) { center.cntrEnt <- e }
 func (center *central) onConnectorEvnet(e *connector.Event) {
-	switch e.Type {
-	case connector.StatusChanged:
-		center.sendViewIpcam(e)
+	if center.hasCtrl {
+		switch e.Type {
+		case connector.StatusChanged:
+			center.sendViewIpcam(e)
 
+		case connector.RecChanged:
+			center.sendLocalCamera(e)
+
+		case connector.StatusNoChange:
+		case connector.SaveFailed:
+
+		case connector.GetOk:
+			center.sendMgrIpcam(e)
+
+		case connector.IcNotFound:
+			center.sendMgrIpcamNotFound(e)
+
+		case connector.DelOk:
+			center.broadcastDelIpcam(e)
+
+		case connector.DelFailed:
+		}
+		if e.Cmd != nil && e.Msg != "" {
+			center.ctrlConn.Send(e.Cmd.ToManyInfo(e.Msg))
+		}
+	}
+	// For local
+	switch e.Type {
 	case connector.RecChanged:
 		center.sendLocalCamera(e)
-
-	case connector.StatusNoChange:
-	case connector.SaveFailed:
-
-	case connector.GetOk:
-		center.sendMgrIpcam(e)
-
-	case connector.IcNotFound:
-		center.sendMgrIpcamNotFound(e)
-
-	case connector.DelOk:
-		center.broadcastDelIpcam(e)
-
-	case connector.DelFailed:
-	}
-	if e.Cmd != nil && e.Msg != "" {
-		center.ctrlConn.Send(e.Cmd.ToManyInfo(e.Msg))
 	}
 }
 

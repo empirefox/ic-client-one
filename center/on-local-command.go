@@ -105,7 +105,7 @@ func (center *central) onSetRecEnabled(id []byte, on bool) {
 func (center *central) sendLocalCamera(e *connector.Event) {
 	msg, _ := json.Marshal(map[string]interface{}{
 		"type":   "Rec",
-		"camera": e.Ic,
+		"camera": e.Ic.Map(),
 		"ids":    center.Connectors.Ids(),
 	})
 	center.onChangeNoStatus(msg)
